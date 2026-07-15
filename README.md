@@ -1,139 +1,553 @@
 # react-native-elderly-access
 
-A Qoder Agent Skill for building accessible, elderly-friendly React Native applications. Born from real-world usability research with 200+ senior users on an elderly-friendly taxi platform.
+> A Qoder Agent Skill for building accessible, elderly-friendly React Native applications — derived from real-world usability research with **200+ senior users** on an elderly-friendly taxi-hailing platform.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-React%20Native-61dafb)
+![Node](https://img.shields.io/badge/node-%3E%3D14.0.0-339933)
+![Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen)
 ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
+
+---
+
+## Table of Contents
+
+- [What Is This?](#what-is-this)
+- [Tech Stack](#tech-stack)
+- [Architecture & Implementation](#architecture--implementation)
+- [Business Logic — Four Core Modules](#business-logic--four-core-modules)
+- [Design System & Tuning](#design-system--tuning)
+- [Project Structure](#project-structure)
+- [Getting Started](#getting-started)
+- [Tools Guide](#tools-guide)
+- [Usability Testing & Data](#usability-testing--data)
+- [Background: The Taxi Platform Story](#background-the-taxi-platform-story)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
 ## What Is This?
 
-This is an **AI Agent Skill** for [Qoder](https://qoder.ai) that teaches the agent how to build React Native apps optimized for elderly users. It provides:
+This project is a **Qoder Agent Skill** — a structured knowledge package that teaches AI coding agents how to generate accessible, elderly-optimized React Native code. It is **not** a runtime library you install via `npm install`; instead, it provides:
 
-- **Component templates** with accessibility baked in (large buttons, voice input, one-tap cards)
-- **Design constraints** derived from real user research (touch targets >= 48dp, font >= 18sp, WCAG AA contrast)
-- **Complete screen examples** from a production taxi-hailing app
-- **Automated tools** for accessibility auditing and component scaffolding
-- **Research methodology** for conducting usability tests with elderly users
+| Deliverable | What It Does |
+|-------------|-------------|
+| **SKILL.md** (368 lines) | Core instructions the agent reads — design constraints, component patterns, screen templates |
+| **prd.md** (225 lines) | Complete Product Requirements Document with functional specs and acceptance criteria |
+| **reference.md** (272 lines) | Component API reference (7 components with full prop tables) |
+| **examples.md** (573 lines) | 6 production-ready screen implementations + usability test data model |
+| **accessibility-guide.md** (250 lines) | User research methodology, design specs, usability testing protocol |
+| **assets/architecture-diagram.md** | UML diagrams: use case, sequence, class, business flow, component architecture |
+| **scripts/check-a11y.js** (364 lines) | CLI tool that scans your RN project for 7 categories of accessibility violations |
+| **scripts/gen-component.js** (662 lines) | CLI tool that scaffolds 7 types of elderly-friendly components |
 
-## Features
+**Zero external dependencies.** Both scripts are pure Node.js — they run on any machine with Node >= 14.
 
-| Feature | Description |
-|---------|-------------|
-| Large Text Mode (大字模式) | Auto-scaling text with in-app toggle, persisted preference |
-| Voice Interaction (语音叫车) | Voice-first UI with Chinese NLP intent mapping |
-| One-Tap Operations (一键叫车) | Pre-configured actions completing in a single tap |
-| Family Payment (亲友代付) | SMS-based payment delegation to family members |
-| Accessibility Audit | Scan your RN project for a11y violations |
-| Component Generator | Scaffold elderly-friendly components instantly |
+---
 
-## Quick Start
+## Tech Stack
 
-### As a Qoder Skill
+### Skill Layer (This Project)
 
-1. Clone this repo into your project's skills directory:
+| Technology | Role | Version |
+|-----------|------|---------|
+| **Node.js** | Runtime for CLI tools (check-a11y.js, gen-component.js) | >= 14.0 |
+| **Qoder Agent Skill** | Skill format (SKILL.md + supporting docs) | Current |
+| **Markdown + YAML** | Skill frontmatter and document format | — |
+| **Git** | Version control and distribution | — |
 
-```bash
-cd your-rn-project
-mkdir -p .qoder/skills
-git clone https://github.com/YOUR_USERNAME/react-native-elderly-access.git .qoder/skills/react-native-elderly-access
+### Target Application Layer (Code This Skill Generates)
+
+| Technology | Role | Notes |
+|-----------|------|-------|
+| **React Native** | Cross-platform mobile framework | TypeScript template |
+| **TypeScript** | Type-safe component development | Strict mode |
+| **@react-native-voice/voice** | Speech recognition (STT) | Chinese (zh-CN) language |
+| **@react-native-async-storage/async-storage** | Persistent user preferences | Font scale, addresses |
+| **React Native Core APIs** | Vibration, Linking, Modal, etc. | Platform-native |
+
+### Development Tools
+
+| Tool | Purpose |
+|------|---------|
+| **check-a11y.js** | Static analysis for accessibility (7 rules) |
+| **gen-component.js** | Component scaffold generator (7 templates) |
+| **Qoder IDE** | AI-powered development environment |
+
+---
+
+## Architecture & Implementation
+
+### System Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   Application Layer                       │
+│  ┌───────────┐  ┌────────────┐  ┌───────────────────┐   │
+│  │ HomeScreen │  │ VoiceBooking│  │ RideStatusScreen  │   │
+│  │ (One-Tap)  │  │ (Voice)     │  │ (Real-time)       │   │
+│  └─────┬─────┘  └──────┬─────┘  └────────┬──────────┘   │
+│        │               │                  │               │
+│  ┌─────┴───────────────┴──────────────────┴──────────┐   │
+│  │          Elderly UI Component Library              │   │
+│  │  ElderlyButton │ OneTapCard │ LargeText            │   │
+│  │  ElderlyModal  │ VoiceInput │ ElderlyBottomNav     │   │
+│  └───────────────────────┬───────────────────────────┘   │
+│                          │                                │
+│  ┌───────────────────────┴───────────────────────────┐   │
+│  │               Service Layer                        │   │
+│  │  VoiceService (STT/TTS) │ RideService │ PayService │   │
+│  └───────────────────────┬───────────────────────────┘   │
+│                          │                                │
+│  ┌───────────────────────┴───────────────────────────┐   │
+│  │           Theme & State Management                │   │
+│  │  ElderlyThemeProvider (React Context) │ AsyncStorage│   │
+│  └───────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────┘
 ```
 
-2. The skill is now active in Qoder. Ask it to:
-   - "Create an elderly-friendly home screen"
-   - "Generate a voice booking component"
-   - "Run an accessibility audit on my project"
+### Implementation Patterns
 
-### Use the Tools Directly
+**1. Theme-Driven Design**
+All components consume design tokens from `ElderlyThemeProvider` via React Context. This ensures consistent font scaling, color, and spacing across the entire app.
 
-**Accessibility Audit** — scan your RN project:
-
-```bash
-node scripts/check-a11y.js ./src
+```typescript
+const { fontScale, largeTextMode, spacing } = useElderlyTheme();
 ```
 
-**Component Generator** — scaffold a new component:
+**2. Voice-First Interaction**
+Every text input screen includes a voice input slot. The `VoiceService` singleton handles STT (speech-to-text) and TTS (text-to-speech), with a built-in intent parser for Chinese natural language commands.
 
-```bash
-node scripts/gen-component.js MyButton                    # Button
-node scripts/gen-component.js VoiceInput --type input     # Voice input
-node scripts/gen-component.js HomeCard --type card        # One-tap card
-node scripts/gen-component.js all --type all              # All components
+**3. Progressive Disclosure**
+Screens show maximum 3 interactive elements. Secondary actions are hidden behind a "more" button or accessible via voice commands.
+
+**4. Fail-Safe Confirmation**
+Every irreversible action (booking a ride, canceling, paying) passes through a large-text confirmation modal with exactly 2 buttons: confirm + cancel.
+
+**5. Haptic Feedback Loop**
+All primary action buttons trigger `Vibration.vibrate(50)` on press, giving elderly users physical confirmation that their tap registered.
+
+### How the Skill Works (Qoder Integration)
+
 ```
+User asks Qoder: "Create an elderly-friendly home screen"
+        │
+        ▼
+Qoder reads SKILL.md → loads design constraints
+        │
+        ▼
+Qoder reads examples.md → loads screen templates
+        │
+        ▼
+Qoder generates code → enforces touch targets, font sizes, accessibility props
+        │
+        ▼
+User runs: node scripts/check-a11y.js ./src → validates output
+```
+
+---
+
+## Business Logic — Four Core Modules
+
+The skill encodes the complete business logic for an elderly-friendly taxi platform, designed from real user research.
+
+### Module 1: One-Tap Ride (一键叫车)
+
+**Problem**: 78% of elderly users found existing apps "too complex".
+**Solution**: Pre-configured destinations, single-tap booking.
+
+```
+User Flow: [Open App] → [Tap "一键打车回家"] → [Confirm] → [Ride Booked]
+Total: 2 taps
+```
+
+| Feature | Spec |
+|---------|------|
+| Pre-saved home address | Stored in AsyncStorage, shown on home screen |
+| Recent destinations | Second card shows last visited place |
+| Haptic feedback | 50ms vibration on tap |
+| Fallback | If no address saved, prompt user to set one |
+
+**Component**: `<OneTapCard>` — large card (min 120dp height), full-card tappable, with icon + title + subtitle.
+
+### Module 2: Voice Command Ride (语音指令叫车)
+
+**Problem**: 68% couldn't type addresses on small screens.
+**Solution**: Voice-first UI with Mandarin Chinese NLP intent mapping.
+
+```
+User Flow: [Tap Mic] → [Speak "打车去北京站"] → [See transcript] → [Confirm] → [Booked]
+Total: 2 taps + 1 voice command
+```
+
+**Voice Intent Mapping** (built into the skill):
+
+| Chinese Input Pattern | Intent ID | System Action |
+|----------------------|-----------|--------------|
+| "我要打车回家" / "回家" | `RIDE_HOME` | Book to saved home address |
+| "打车去[地点]" / "去[地点]" | `RIDE_TO` | Set destination to [地点] |
+| "帮我叫车" / "叫个车" | `REQUEST_RIDE` | Open booking flow |
+| "取消叫车" / "不要了" | `CANCEL_RIDE` | Cancel current order |
+| "车到哪了" / "还要多久" | `CHECK_STATUS` | Show driver location |
+
+**Components**: `<ElderlyVoiceInput>` + `VoiceService` (singleton) + `parseVoiceIntent()` utility.
+
+### Module 3: Large Text Mode (大字模式)
+
+**Problem**: 85% reported "text too small to read".
+**Solution**: In-app font scale toggle (1.0x – 2.0x), persisted preference.
+
+| Element | Normal | 1.5x | 2.0x |
+|---------|--------|------|------|
+| Heading | 28sp | 42sp | 56sp |
+| Body | 20sp | 30sp | 40sp |
+| Button | 20sp | 30sp | 40sp |
+
+**Component**: `<LargeText>` — auto-scales based on `fontScale` from `ElderlyThemeProvider`, respects system Dynamic Type / Android font scale.
+
+### Module 4: Family Payment (亲友代付)
+
+**Problem**: 61% found mobile payment confusing or anxiety-inducing.
+**Solution**: SMS-based payment delegation to family members.
+
+```
+Flow: [Trip ends] → [Tap "发给家人代付"] → [Pick contact] → [SMS sent]
+      → [Family opens link] → [One-tap confirm payment]
+```
+
+**Components**: `FamilyPayButton` (contact picker + SMS), `PaymentStatusCard` (real-time tracking), `PaymentConfirmScreen` (family member view).
+
+---
+
+## Design System & Tuning
+
+### Built-In Design Constraints
+
+Every component and screen this skill generates **automatically enforces** these rules:
+
+| Constraint | Rule | Rationale |
+|-----------|------|-----------|
+| Touch target | ≥ 48×48dp (recommended 56dp) | Elderly users have reduced motor precision |
+| Font size | Body ≥ 18sp, headings ≥ 24sp | Presbyopia affects 85% of users 60+ |
+| Color contrast | WCAG AA ≥ 4.5:1 | Aging eyes need more contrast |
+| Interaction depth | Max 3 taps to any primary task | Cognitive load reduction |
+| Animation | No flashing > 3Hz, transitions ≤ 300ms | Prevent disorientation |
+| Spacing | Padding ≥ 16dp, button gap ≥ 12dp | Prevent accidental taps |
+| Error recovery | Always show visible "Back" button | Reduce anxiety about mistakes |
+| Haptic feedback | 50ms vibration on primary actions | Physical confirmation of tap |
+
+### Color Palette (WCAG AA Verified)
+
+| Token | Hex | Contrast on White | Usage |
+|-------|-----|-------------------|-------|
+| Primary | `#1565C0` | 5.74:1 | Buttons, links, active states |
+| Success | `#2E7D32` | 5.87:1 | Confirmations, driver arrived |
+| Error | `#D32F2F` | 5.57:1 | Error messages, cancel actions |
+| Text Primary | `#1A1A1A` | 16.75:1 | All body text |
+| Text Secondary | `#666666` | 5.74:1 | Captions, subtitles |
+| Background | `#FAFAFA` | — | Screen background |
+
+### Accessibility Audit Rules (check-a11y.js)
+
+The built-in scanner checks 7 rules:
+
+| Rule ID | Check | Severity |
+|---------|-------|----------|
+| A11Y-001 | Missing `accessibilityLabel` on interactive components | Error |
+| A11Y-002 | Missing `accessibilityRole` on touchables | Warning |
+| A11Y-003 | Touch target < 48dp (height/width) | Error |
+| A11Y-004 | Font size < 18sp for body text | Warning |
+| A11Y-005 | Hardcoded color (should use theme) | Info |
+| A11Y-006 | Color contrast ratio < 4.5:1 | Error |
+| A11Y-007 | Missing `hitSlop` on icon buttons | Info |
+
+**Tuning tip**: Run `node scripts/check-a11y.js --json ./src` for machine-readable output you can integrate into CI/CD pipelines.
+
+---
 
 ## Project Structure
 
 ```
-.
-├── SKILL.md                    # Main skill instructions (entry point)
-├── prd.md                      # Product requirements document (PRD)
-├── reference.md                # Component API reference
-├── examples.md                 # Complete screen code examples
-├── accessibility-guide.md      # Design principles & research methodology
-├── scripts/
-│   ├── check-a11y.js           # Accessibility audit tool
-│   └── gen-component.js        # Component scaffold generator
+react-native-elderly-access/
+│
+├── SKILL.md                        # [Entry Point] Core skill instructions
+│                                   #   Design constraints, 4 module patterns,
+│                                   #   component templates, validation checklist
+│
+├── prd.md                          # [Product] Complete PRD
+│                                   #   User research findings, functional requirements
+│                                   #   for all 4 modules, non-functional requirements,
+│                                   #   3-round usability test data
+│
+├── reference.md                    # [API] Component reference
+│                                   #   ElderlyThemeProvider, ElderlyButton,
+│                                   #   ElderlyTextInput, LargeText, OneTapCard,
+│                                   #   ElderlyModal, ElderlyBottomNav, VoiceService
+│
+├── examples.md                     # [Code] 6 complete screen implementations
+│                                   #   Home, VoiceBooking, RideStatus,
+│                                   #   FamilyPay, Settings + test data model
+│
+├── accessibility-guide.md          # [Research] Design & methodology guide
+│                                   #   Survey/interview templates, persona template,
+│                                   #   journey map, visual specs, testing protocol,
+│                                   #   three-dimensional evaluation model
+│
 ├── assets/
-│   └── architecture-diagram.md # UML diagrams & system architecture
-├── README.md                   # This file
-├── LICENSE                     # MIT License
-└── CONTRIBUTING.md             # Contribution guidelines
+│   └── architecture-diagram.md     # [Architecture] UML diagrams
+│                                   #   Use case, business flow, sequence,
+│                                   #   class, component architecture
+│
+├── scripts/
+│   ├── check-a11y.js               # [Tool] Accessibility audit (7 rules)
+│   └── gen-component.js            # [Tool] Component scaffold (7 types)
+│
+├── .github/
+│   ├── ISSUE_TEMPLATE/
+│   │   ├── bug-report.md           # Bug report template
+│   │   └── feature-request.md      # Feature request template
+│   └── pull_request_template.md    # PR template with a11y checklist
+│
+├── package.json                    # npm scripts: check-a11y, gen-component, test
+├── README.md                       # This file
+├── CONTRIBUTING.md                 # Contribution guidelines
+├── LICENSE                         # MIT License
+└── .gitignore                      # Git ignore rules
 ```
 
-## Design Constraints (Built-In)
+---
 
-Every component and screen generated by this skill enforces:
+## Getting Started
 
-| Constraint | Requirement |
-|------------|-------------|
-| Touch target | >= 48x48 dp (recommended 56x56 dp) |
-| Font size | Body >= 18sp, headings >= 24sp |
-| Color contrast | WCAG AA >= 4.5:1 |
-| Interaction depth | Max 3 taps to complete any primary task |
-| Animation | No flashing > 3Hz, transitions <= 300ms |
-| Error recovery | Always provide visible back/undo button |
+### Prerequisites
 
-## Background: Elderly Taxi Platform
+- **Node.js** >= 14.0 (for running scripts)
+- **Qoder IDE** (for using this as an Agent Skill)
+- **Git** (for cloning the repository)
 
-This skill is based on a real product design project:
+### Option A: Use as a Qoder Skill (Recommended)
 
-> **Elderly-Friendly Taxi Platform** (2025.09 - 2026.01)
+This is the primary use case — teach Qoder how to generate elderly-friendly RN code.
+
+```bash
+# 1. Navigate to your React Native project
+cd your-rn-project
+
+# 2. Create the skills directory
+mkdir -p .qoder/skills
+
+# 3. Clone this skill into it
+git clone https://github.com/YOUR_USERNAME/react-native-elderly-access.git .qoder/skills/react-native-elderly-access
+```
+
+Once installed, Qoder will automatically load this skill. Try asking:
+
+- *"Create an elderly-friendly home screen with one-tap ride home"*
+- *"Generate a voice booking component for Mandarin Chinese"*
+- *"Build a settings screen with font size toggle and live preview"*
+- *"Run an accessibility audit on my src directory"*
+
+### Option B: Use the CLI Tools Directly
+
+You don't need Qoder to use the tools — they work standalone.
+
+#### Accessibility Audit
+
+Scan any React Native project for accessibility issues:
+
+```bash
+# Scan a directory (default: ./src)
+node scripts/check-a11y.js ./src
+
+# Scan a single file
+node scripts/check-a11y.js src/screens/HomeScreen.tsx
+
+# JSON output (for CI/CD integration)
+node scripts/check-a11y.js --json ./src > a11y-report.json
+```
+
+**Sample output:**
+```
+╔══════════════════════════════════════════════════════════╗
+║    Elderly Accessibility Audit Report (适老化无障碍报告) ║
+╚══════════════════════════════════════════════════════════╝
+
+📄 src/screens/HomeScreen.tsx
+────────────────────────────────────────────────────────────
+  ❌ [A11Y-003] Line 42: height 36dp < 48dp minimum
+     💡 Increase height to at least 48dp
+  ⚠️ [A11Y-002] Line 58: <TouchableOpacity> missing accessibilityRole
+     💡 Add accessibilityRole="button"
+
+📊 Summary: Errors: 1, Warnings: 1, Info: 0
+```
+
+#### Component Generator
+
+Scaffold elderly-friendly components with accessibility baked in:
+
+```bash
+# Generate a button component
+node scripts/gen-component.js MyButton
+
+# Generate a voice input component
+node scripts/gen-component.js VoiceSearch --type input
+
+# Generate a one-tap card
+node scripts/gen-component.js HomeRideCard --type card
+
+# Generate a confirmation modal
+node scripts/gen-component.js BookingConfirm --type modal
+
+# Generate a large text component
+node scripts/gen-component.js PriceText --type text
+
+# Generate a bottom navigation
+node scripts/gen-component.js MainNav --type nav
+
+# Generate a full screen template
+node scripts/gen-component.js ProfileScreen --type screen
+
+# Generate ALL components at once
+node scripts/gen-component.js all --type all
+
+# Specify output directory
+node scripts/gen-component.js MyButton --type button --out ./src/components
+```
+
+#### Run the Test Suite
+
+Verify that generated components pass accessibility checks:
+
+```bash
+# Using npm (if available)
+npm test
+
+# Or manually
+node scripts/gen-component.js all --type all --out ./test-output
+node scripts/check-a11y.js test-output
+# Expected: 0 errors, 0 warnings
+```
+
+---
+
+## Tools Guide
+
+### check-a11y.js — Accessibility Audit
+
+| Feature | Detail |
+|---------|--------|
+| Input | Directory path, single file, or `--json` flag |
+| Scans | `.tsx`, `.ts`, `.jsx`, `.js` files |
+| Skips | `node_modules`, `.git`, `android`, `ios` directories |
+| Rules | 7 rules covering touch targets, fonts, contrast, a11y props, colors |
+| Output | Human-readable report or JSON |
+| Exit code | 0 = no errors, 1 = errors found (for CI integration) |
+
+### gen-component.js — Component Scaffold
+
+| Feature | Detail |
+|---------|--------|
+| Templates | 7 types: button, input, card, modal, text, nav, screen |
+| Output | TypeScript (`.tsx`) files with full type interfaces |
+| Accessibility | All generated components include `accessibilityLabel`, `accessibilityRole`, `hitSlop`, haptic feedback |
+| Customization | `--out` flag to specify output directory |
+| Dependencies | Zero — pure Node.js, no npm install needed |
+
+---
+
+## Usability Testing & Data
+
+### Research Foundation
+
+This skill's design constraints are not arbitrary — they come from rigorous research:
+
+| Phase | Method | Sample Size | Outcome |
+|-------|--------|-------------|---------|
+| Quantitative Survey | Structured questionnaire | N=213 | Pain point frequency ranking |
+| Deep Interview | Semi-structured, 30-45min | N=18 | Emotional context & journey maps |
+| Contextual Observation | Task-based observation | N=8 | Behavioral patterns |
+
+### Three-Dimensional Evaluation Model
+
+```
+Score = 0.4 × CompletionRate + 0.3 × TimeScore + 0.3 × SatisfactionScore
+```
+
+Weights reflect elderly user priorities: **task completion matters most** (0.4), followed by speed as cognitive load proxy (0.3), then subjective comfort (0.3).
+
+### 3-Round Iteration Results
+
+| Metric | Round 1 | Round 2 | Round 3 | Delta |
+|--------|---------|---------|---------|-------|
+| Task Completion | 72% | 88% | **95%** | +23pp |
+| Avg Booking Time | 180s | 120s | **90s** | **-90s** |
+| Satisfaction | 64% | 82% | **92%** | +28pp |
+| Error Rate | 34% | 15% | **6%** | -28pp |
+| Assistance Needed | 40% | 18% | **8%** | -32pp |
+
+### Key Iteration Insights
+
+**Round 1 → 2** (biggest gains):
+- Button size 44dp → 56dp (addressed "怕按错了")
+- Added voice input (addressed "不知道怎么输入")
+- Home screen: 6 actions → 3 (addressed "操作太复杂")
+
+**Round 2 → 3** (refinement):
+- Added haptic feedback on all buttons (increased tap confidence)
+- Added TTS ride status announcements (addressed "不知道车在哪")
+- Refined modal layout (reduced accidental cancellations)
+
+Full testing protocol and templates: see [accessibility-guide.md](accessibility-guide.md).
+
+---
+
+## Background: The Taxi Platform Story
+
+This skill was born from a real product design project:
+
+> **Elderly-Friendly Taxi Platform** (2025.09 — 2026.01)
+> **Role**: Product Design & System Modeling Lead
 >
-> - Conducted mixed-method research (survey + interview) with 200+ elderly users
-> - Translated emotional pain points ("too complex", "text too small") into quantifiable design requirements
-> - Built a high-fidelity interactive prototype in 48 hours using Vibe Coding
-> - Designed 4 core modules: One-Tap Ride, Voice Booking, Large Text Mode, Family Payment
-> - Completed full UML modeling (use case, sequence, class, activity diagrams)
-> - Ran 3 rounds of usability testing with 10 target users
-> - Results: ride-hailing time reduced by 1+ minute, satisfaction reached 92%
+> 1. **User Research**: Designed a mixed-method survey + deep interview study covering 200+ elderly users. Used persona modeling and journey mapping to translate emotional pain points ("too complex", "text too small") into quantifiable engineering requirements ("reduce decision nodes", "enlarge touch targets").
+>
+> 2. **Vibe Coding Prototype**: Using Qoder + Claude Code, independently built a high-fidelity interactive prototype of the elderly taxi app (voice booking, one-tap ride, large text mode) in 48 hours. Used directly for user testing and team reviews, compressing prototype iteration from 2 weeks to 3 days.
+>
+> 3. **System Modeling**: Completed full UML stack modeling (business flow, sequence, use case, class diagrams). Designed four modules: One-Tap Ride, Voice Command Ride, Large Text Mode, Family Payment. Delivered complete PRD and functional specification.
+>
+> 4. **Validation**: Organized usability testing with 10 target users. Established a three-dimensional evaluation model (completion rate × task time × satisfaction). Through 3 rounds of iteration, reduced average ride-hailing time by over 1 minute and achieved 92% user satisfaction.
 
-## Screenshots
-
-The skill generates screens like these (conceptual):
-
-| Home Screen | Voice Booking | Ride Status |
-|-------------|---------------|-------------|
-| One-tap ride home, voice call, recent destinations | Large mic button, voice transcript, confirmation modal | Driver info, ETA, call/cancel buttons |
+---
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 
-Areas we'd love help with:
-- More component types (date picker, map view, contact list)
-- Localization support (other languages beyond Chinese)
-- Integration with more voice recognition providers
-- Additional usability testing templates
-- iOS/Android platform-specific accessibility improvements
+**Quick rules:**
+- All components must pass `check-a11y.js` with 0 errors
+- Include `accessibilityLabel` and `accessibilityRole` on every interactive element
+- Keep SKILL.md under 500 lines; put detailed content in reference files
+- Test scripts with `node scripts/gen-component.js all --type all --out ./test-output`
+
+**Areas we need help with:**
+- More component types (date picker, map view, contact list, ride history)
+- Localization beyond Chinese (English, Japanese, Korean voice intents)
+- Integration with additional voice recognition providers
+- iOS VoiceOver and Android TalkBack platform-specific testing
+- Additional usability testing templates and scoring models
+
+---
 
 ## License
 
-[MIT](LICENSE) - feel free to use in personal and commercial projects.
+[MIT](LICENSE) — free to use in personal and commercial projects.
+
+---
 
 ## Acknowledgments
 
 - The 200+ elderly users who participated in our research
 - The React Native accessibility community
-- WCAG guidelines by W3C
+- [WCAG 2.1 Guidelines](https://www.w3.org/WAI/WCAG21/quickref/) by W3C
+- [Qoder](https://qoder.ai) for the Agent Skill platform
