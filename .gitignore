@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Generated test output
+test-output/
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Qoder internal
+.qoder/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
