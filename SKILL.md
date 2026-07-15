@@ -358,6 +358,7 @@ const styles = StyleSheet.create({
 
 ## Additional Resources
 
+- Product requirements & module design: see [prd.md](prd.md)
 - Component API details and voice integration: see [reference.md](reference.md)
 - Complete taxi app screen examples: see [examples.md](examples.md)
 - Research methodology and usability testing: see [accessibility-guide.md](accessibility-guide.md)

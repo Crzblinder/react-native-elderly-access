@@ -1,0 +1,38 @@
+{
+  "name": "react-native-elderly-access",
+  "version": "1.0.0",
+  "description": "Qoder Agent Skill for building accessible, elderly-friendly React Native applications. Includes component templates, design guidelines, accessibility audit tools, and usability testing methodology derived from research with 200+ senior users.",
+  "keywords": [
+    "react-native",
+    "accessibility",
+    "a11y",
+    "elderly-friendly",
+    "适老化",
+    "无障碍",
+    "qoder-skill",
+    "voice-interaction",
+    "large-text",
+    "senior-ux",
+    "wcag",
+    "inclusive-design"
+  ],
+  "homepage": "https://github.com/YOUR_USERNAME/react-native-elderly-access#readme",
+  "bugs": {
+    "url": "https://github.com/YOUR_USERNAME/react-native-elderly-access/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/react-native-elderly-access.git"
+  },
+  "license": "MIT",
+  "author": "",
+  "scripts": {
+    "check-a11y": "node scripts/check-a11y.js",
+    "gen-component": "node scripts/gen-component.js",
+    "gen-all": "node scripts/gen-component.js all --type all",
+    "test": "node scripts/gen-component.js all --type all --out ./test-output && node scripts/check-a11y.js test-output"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

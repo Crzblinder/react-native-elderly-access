@@ -68,6 +68,7 @@ node scripts/gen-component.js all --type all              # All components
 ```
 .
 ├── SKILL.md                    # Main skill instructions (entry point)
+├── prd.md                      # Product requirements document (PRD)
 ├── reference.md                # Component API reference
 ├── examples.md                 # Complete screen code examples
 ├── accessibility-guide.md      # Design principles & research methodology

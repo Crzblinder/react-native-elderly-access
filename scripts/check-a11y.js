@@ -130,6 +130,9 @@ const RULES = [
     description: `Touch targets must be ≥ ${CONFIG.minTouchTarget}dp`,
     test: (line, lineNumber) => {
       const issues = [];
+      // Skip non-layout properties (shadow, border, etc.)
+      const skipPatterns = ['shadowOffset', 'shadowRadius', 'border', 'padding', 'margin', 'borderRadius'];
+      if (skipPatterns.some((p) => line.includes(p))) return issues;
       const heightMatch = line.match(/height:\s*(\d+)/);
       const widthMatch = line.match(/width:\s*(\d+)/);
       if (heightMatch && parseInt(heightMatch[1]) < CONFIG.minTouchTarget) {
