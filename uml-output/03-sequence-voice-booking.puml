@@ -1,0 +1,51 @@
+@startuml
+title 适老化打车平台 - 语音叫车时序图 (Sequence Diagram)
+
+actor "老年用户" as User
+participant "APP前端\n(React Native)" as App
+participant "语音服务\n(Voice Service)" as Voice
+participant "后端API\n(Backend API)" as API
+participant "司机端" as Driver
+
+User -> App: 点击麦克风按钮
+activate App
+App -> Voice: 开始录音 (zh-CN)
+activate Voice
+User -> Voice: 说出目的地
+Voice --> App: 返回识别文本
+deactivate Voice
+App -> App: 解析语音意图\n(parseVoiceIntent)
+App --> User: 显示确认弹窗\n(大字模式)
+deactivate App
+
+User -> App: 点击"确认叫车"
+activate App
+App -> API: POST /ride/createOrder\n{destination, userId}
+activate API
+API -> API: 创建订单
+API -> Driver: 推送订单通知
+activate Driver
+Driver --> API: 司机接单
+deactivate Driver
+API --> App: 返回司机信息\n{name, carModel, plateNumber, eta}
+deactivate API
+App -> Voice: TTS播报\n"已为您匹配司机..."
+activate Voice
+Voice --> User: 语音播报
+deactivate Voice
+App --> User: 显示司机信息\n(大字车牌号)
+deactivate App
+
+== 等待接驾 ==
+
+Driver -> API: 更新位置/状态
+API --> App: 实时推送状态
+App -> Voice: TTS播报状态变化
+Voice --> User: "司机即将到达"
+
+== 行程结束 ==
+
+Driver -> API: 结束行程
+API --> App: 推送账单信息
+App --> User: 显示支付界面
+@enduml

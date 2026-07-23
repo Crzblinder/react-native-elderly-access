@@ -1,0 +1,180 @@
+@startuml
+title 适老化打车平台 - 核心类图 (Class Diagram)
+
+skinparam classAttributeIconSize 0
+
+class ElderlyThemeProvider {
+  +fontScale: number
+  +largeTextMode: boolean
+  +highContrast: boolean
+  +reducedMotion: boolean
+  +spacing: number
+  +primaryColor: string
+  +backgroundColor: string
+  +toggleLargeText(): void
+  +setFontScale(scale: number): void
+  +toggleHighContrast(): void
+}
+
+class "useElderlyTheme()" as useElderlyTheme {
+  +fontScale: number
+  +largeTextMode: boolean
+  +spacing: number
+  +toggleLargeText(): void
+  +setFontScale(): void
+}
+
+class VoiceService {
+  -language: string
+  -isListening: boolean
+  +init(config): Promise<void>
+  +start(): void
+  +stop(): void
+  +onResult(callback): void
+  +speak(text): void
+}
+
+class RideService {
+  +createOrder(params): Promise<Order>
+  +cancelOrder(orderId): Promise<void>
+  +getStatus(orderId): Promise<Status>
+  +getDriverInfo(orderId): Promise<DriverInfo>
+}
+
+class PaymentService {
+  +selfPay(orderId): Promise<Receipt>
+  +familyPay(orderId, contact): Promise<void>
+  +getStatus(orderId): Promise<PaymentStatus>
+  +sendPayLink(orderId, phone): Promise<void>
+}
+
+class HomeScreen {
+  -homeAddress: string
+  -recentDest: string
+  +handleOneTapHome(): void
+}
+
+class VoiceBookingScreen {
+  -destination: string
+  -showConfirm: boolean
+  -isBooking: boolean
+  +handleVoiceResult(text): void
+  +handleConfirmBooking(): void
+}
+
+class RideStatusScreen {
+  -driver: DriverInfo
+  -status: 'matching' | 'assigned' | 'arriving' | 'arrived'
+}
+
+class FamilyPayScreen {
+  -trip: TripSummary
+  -sending: boolean
+  +handleFamilyPay(): void
+}
+
+class SettingsScreen {
+  -previewScale: number
+  +handleSave(): void
+}
+
+class ElderlyButton {
+  +onPress: () => void
+  +variant: 'primary' | 'secondary' | 'danger' | 'back'
+  +size: 'large' | 'medium'
+  +icon: string
+  +disabled: boolean
+  +loading: boolean
+  +haptic: boolean
+}
+
+class ElderlyTextInput {
+  +value: string
+  +onChangeText: (text) => void
+  +voiceEnabled: boolean
+  +onVoiceResult: (text) => void
+  +clearable: boolean
+  +fontSize: number
+}
+
+class OneTapCard {
+  +title: string
+  +subtitle: string
+  +icon: string
+  +onPress: () => void
+  +disabled: boolean
+  +badge: string
+}
+
+class LargeText {
+  +variant: 'heading' | 'body' | 'caption'
+  +color: string
+  +bold: boolean
+  +center: boolean
+}
+
+class ElderlyModal {
+  +visible: boolean
+  +title: string
+  +message: string
+  +primaryBtn: {label, onPress}
+  +secondaryBtn: {label, onPress}
+}
+
+class ElderlyBottomNav {
+  +items: NavItem[]
+  +active: number
+}
+
+class UsabilityTestSession {
+  +userId: string
+  +userAge: number
+  +date: string
+  +tasks: UsabilityTask[]
+  +overallSatisfaction: number
+}
+
+class UsabilityTask {
+  +taskId: string
+  +taskName: string
+  +completed: boolean
+  +timeSeconds: number
+  +errorCount: number
+  +assistanceNeeded: boolean
+  +satisfaction: number
+}
+
+ElderlyThemeProvider ..> useElderlyTheme : provides
+HomeScreen ..> useElderlyTheme : uses
+SettingsScreen ..> useElderlyTheme : uses
+
+HomeScreen ..> OneTapCard : contains
+HomeScreen ..> ElderlyButton : contains
+HomeScreen ..> ElderlyBottomNav : contains
+
+VoiceBookingScreen ..> ElderlyTextInput : contains
+VoiceBookingScreen ..> ElderlyModal : contains
+VoiceBookingScreen ..> ElderlyButton : contains
+
+RideStatusScreen ..> ElderlyButton : contains
+FamilyPayScreen ..> ElderlyButton : contains
+SettingsScreen ..> ElderlyButton : contains
+
+VoiceBookingScreen ..> VoiceService : uses
+VoiceBookingScreen ..> RideService : uses
+RideStatusScreen ..> VoiceService : uses
+
+FamilyPayScreen ..> PaymentService : uses
+
+UsabilityTestSession "1" *-- "many" UsabilityTask
+
+note right of VoiceService
+  Singleton 服务
+  封装 react-native-voice
+end note
+
+note bottom of ElderlyThemeProvider
+  全局主题上下文
+  持久化到 AsyncStorage
+end note
+@enduml

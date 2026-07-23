@@ -1,0 +1,87 @@
+@startuml
+title 适老化打车平台 - 组件架构图 (Component Diagram)
+
+package "App Layer" {
+    [HomeScreen]
+    [VoiceBookingScreen]
+    [RideStatusScreen]
+    [FamilyPayScreen]
+    [SettingsScreen]
+    [HistoryScreen]
+    [ProfileScreen]
+}
+
+package "Elderly UI Components" {
+    [ElderlyButton]
+    [OneTapCard]
+    [LargeText]
+    [ElderlyTextInput]
+    [ElderlyModal]
+    [ElderlyBottomNav]
+    [ElderlyVoiceInput]
+}
+
+package "Service Layer" {
+    [VoiceService]
+    [RideService]
+    [PaymentService]
+}
+
+package "Theme & State" {
+    [ElderlyThemeProvider]
+    [AsyncStorage]
+}
+
+package "External APIs" {
+    [Speech-to-Text API]
+    [TTS API]
+    [Ride Backend API]
+    [Payment Gateway]
+    [SMS Service]
+}
+
+[HomeScreen] --> [OneTapCard]
+[HomeScreen] --> [ElderlyButton]
+[HomeScreen] --> [ElderlyBottomNav]
+
+[VoiceBookingScreen] --> [ElderlyVoiceInput]
+[VoiceBookingScreen] --> [ElderlyModal]
+[VoiceBookingScreen] --> [ElderlyButton]
+
+[RideStatusScreen] --> [ElderlyButton]
+[FamilyPayScreen] --> [ElderlyButton]
+[SettingsScreen] --> [ElderlyButton]
+
+[VoiceBookingScreen] --> [VoiceService]
+[RideStatusScreen] --> [VoiceService]
+
+[VoiceBookingScreen] --> [RideService]
+[RideStatusScreen] --> [RideService]
+
+[FamilyPayScreen] --> [PaymentService]
+
+[HomeScreen] --> [ElderlyThemeProvider]
+[SettingsScreen] --> [ElderlyThemeProvider]
+
+[VoiceService] --> [Speech-to-Text API]
+[VoiceService] --> [TTS API]
+
+[RideService] --> [Ride Backend API]
+
+[PaymentService] --> [Payment Gateway]
+[PaymentService] --> [SMS Service]
+
+[ElderlyThemeProvider] --> [AsyncStorage]
+
+note right of [ElderlyThemeProvider]
+  管理字体缩放、
+  高对比度、
+  减少动画等设置
+end note
+
+note bottom of [VoiceService]
+  单例服务
+  支持语音输入和
+  语音播报反馈
+end note
+@enduml
