@@ -1,12 +1,14 @@
 @startuml
-title 适老化打车平台 - 语音叫车时序图 (Sequence Diagram)
+title 适老化打车平台 - 语音叫车完整链路时序图 (Sequence Diagram)
 
 actor "老年用户" as User
 participant "APP前端\n(React Native)" as App
 participant "语音服务\n(Voice Service)" as Voice
 participant "后端API\n(Backend API)" as API
 participant "司机端" as Driver
+participant "亲友端" as Family
 
+== 1. 语音输入 ==
 User -> App: 点击麦克风按钮
 activate App
 App -> Voice: 开始录音 (zh-CN)
@@ -14,19 +16,39 @@ activate Voice
 User -> Voice: 说出目的地
 Voice --> App: 返回识别文本
 deactivate Voice
-App -> App: 解析语音意图\n(parseVoiceIntent)
+App -> App: 解析语音意图\n(parseVoiceIntent) + 置信度判断
+
+alt 高置信度
+  App --> User: 自动填充目的地
+else 低置信度
+  App --> User: 展示候选列表\n(大字卡片选择)
+  User -> App: 点选目的地
+end
+
 App --> User: 显示确认弹窗\n(大字模式)
 deactivate App
 
+== 2. 创建订单 ==
 User -> App: 点击"确认叫车"
 activate App
-App -> API: POST /ride/createOrder\n{destination, userId}
+App -> API: POST /ride/createOrder\n{destination, userId, priorityType}
 activate API
 API -> API: 创建订单
+alt 目的地为医院
+  API -> API: 就医优先派单\n(提升附近司机权重)
+end
 API -> Driver: 推送订单通知
 activate Driver
 Driver --> API: 司机接单
 deactivate Driver
+
+alt 3分钟无司机接单
+  API -> API: 自动扩大匹配半径
+  API --> App: 推送"正在扩大范围找车"
+  App -> Voice: TTS播报
+  Voice --> User: "正在为您扩大范围找车"
+end
+
 API --> App: 返回司机信息\n{name, carModel, plateNumber, eta}
 deactivate API
 App -> Voice: TTS播报\n"已为您匹配司机..."
@@ -36,16 +58,68 @@ deactivate Voice
 App --> User: 显示司机信息\n(大字车牌号)
 deactivate App
 
-== 等待接驾 ==
-
+== 3. 接驾等待 ==
 Driver -> API: 更新位置/状态
 API --> App: 实时推送状态
 App -> Voice: TTS播报状态变化
 Voice --> User: "司机即将到达"
 
-== 行程结束 ==
+== 4. 安全守护（新增） ==
+API -> Family: 推送行程开始通知\n+实时位置链接
+activate Family
+Family --> API: 查看实时轨迹
+Family --> API: 一键拨打司机电话
+deactivate Family
 
+Driver -> User: 到达上车点
+User -> App: 确认车牌号
+alt 车牌号匹配
+  App --> User: "车牌号匹配，请上车"
+else 车牌号不匹配
+  App --> User: 大字弹窗警告"车牌号不符，请勿上车"
+  App -> Voice: TTS播报安全提醒
+  App -> Family: 自动通知亲友
+end
+
+== 5. 行程中（紧急求助）==
+User -> App: 长按SOS按钮
+activate App
+App -> API: 触发紧急求助\n{orderId, location}
+activate API
+API -> API: 拨打110/120（自动/转接）
+API -> Family: 实时位置共享+行程录音启动
+API --> App: 求助已响应
+deactivate API
+App --> User: 大字确认"已为您呼叫帮助"
+deactivate App
+
+== 6. 行程结束与支付 ==
 Driver -> API: 结束行程
 API --> App: 推送账单信息
 App --> User: 显示支付界面
+User -> App: 选择支付方式
+alt 自己支付-线上
+  App -> API: 发起线上支付
+  API --> App: 支付成功
+else 自己支付-现金（新增）
+  App --> User: "请向司机支付现金"
+  Driver -> API: 确认收到现金
+  API --> App: 现金支付完成
+else 亲友代付
+  App -> API: 生成支付链接
+  API -> Family: 发送SMS/微信支付链接
+  Family -> API: 确认代付
+  API --> App: 支付完成
+end
+
+App --> User: 大字支付结果确认
+
+== 7. 行后关怀（新增） ==
+alt 终点为医院
+  API -> Family: 推送"已到达医院"通知
+  App -> Voice: TTS播报"已到达，祝您一切顺利"
+end
+
+API -> API: 生成行程记录
+App --> User: 展示行程记录
 @enduml

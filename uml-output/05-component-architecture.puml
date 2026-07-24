@@ -4,6 +4,8 @@ title 适老化打车平台 - 组件架构图 (Component Diagram)
 package "App Layer" {
     [HomeScreen]
     [VoiceBookingScreen]
+    [QRBookingScreen]
+    [HotlineBookingScreen]
     [RideStatusScreen]
     [FamilyPayScreen]
     [SettingsScreen]
@@ -19,12 +21,15 @@ package "Elderly UI Components" {
     [ElderlyModal]
     [ElderlyBottomNav]
     [ElderlyVoiceInput]
+    [SOSButton]
+    [LiveLocationCard]
 }
 
 package "Service Layer" {
     [VoiceService]
     [RideService]
     [PaymentService]
+    [SafetyService]
 }
 
 package "Theme & State" {
@@ -38,6 +43,9 @@ package "External APIs" {
     [Ride Backend API]
     [Payment Gateway]
     [SMS Service]
+    [Emergency Service API]
+    [QR Code Scanner]
+    [Hotline 95128]
 }
 
 [HomeScreen] --> [OneTapCard]
@@ -48,7 +56,15 @@ package "External APIs" {
 [VoiceBookingScreen] --> [ElderlyModal]
 [VoiceBookingScreen] --> [ElderlyButton]
 
+[QRBookingScreen] --> [QR Code Scanner]
+[QRBookingScreen] --> [ElderlyButton]
+[HotlineBookingScreen] --> [Hotline 95128]
+
 [RideStatusScreen] --> [ElderlyButton]
+[RideStatusScreen] --> [LiveLocationCard]
+[RideStatusScreen] --> [SOSButton]
+[RideStatusScreen] --> [ElderlyModal]
+
 [FamilyPayScreen] --> [ElderlyButton]
 [SettingsScreen] --> [ElderlyButton]
 
@@ -56,7 +72,11 @@ package "External APIs" {
 [RideStatusScreen] --> [VoiceService]
 
 [VoiceBookingScreen] --> [RideService]
+[QRBookingScreen] --> [RideService]
+[HotlineBookingScreen] --> [RideService]
 [RideStatusScreen] --> [RideService]
+
+[RideStatusScreen] --> [SafetyService]
 
 [FamilyPayScreen] --> [PaymentService]
 
@@ -71,6 +91,10 @@ package "External APIs" {
 [PaymentService] --> [Payment Gateway]
 [PaymentService] --> [SMS Service]
 
+[SafetyService] --> [Ride Backend API]
+[SafetyService] --> [Emergency Service API]
+[SafetyService] --> [SMS Service]
+
 [ElderlyThemeProvider] --> [AsyncStorage]
 
 note right of [ElderlyThemeProvider]
@@ -83,5 +107,17 @@ note bottom of [VoiceService]
   单例服务
   支持语音输入和
   语音播报反馈
+end note
+
+note bottom of [SafetyService]
+  新增安全服务模块
+  行程守护 / 车牌校验
+  SOS紧急求助
+  实时位置共享
+end note
+
+note right of [RideService]
+  就医优先派单
+  无接单自动扩范围
 end note
 @enduml

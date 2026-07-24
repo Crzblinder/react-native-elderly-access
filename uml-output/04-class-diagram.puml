@@ -32,6 +32,7 @@ class VoiceService {
   +stop(): void
   +onResult(callback): void
   +speak(text): void
+  +recognizeWithConfidence(): Promise<{text, confidence}>
 }
 
 class RideService {
@@ -39,13 +40,24 @@ class RideService {
   +cancelOrder(orderId): Promise<void>
   +getStatus(orderId): Promise<Status>
   +getDriverInfo(orderId): Promise<DriverInfo>
+  +expandMatchRange(orderId): Promise<void>
+  +setPriorityDispatch(orderId, type): Promise<void>
 }
 
 class PaymentService {
   +selfPay(orderId): Promise<Receipt>
+  +cashPay(orderId): Promise<Receipt>
   +familyPay(orderId, contact): Promise<void>
   +getStatus(orderId): Promise<PaymentStatus>
   +sendPayLink(orderId, phone): Promise<void>
+}
+
+class SafetyService {
+  +shareLocation(orderId, family): Promise<void>
+  +startTripRecording(orderId): void
+  +triggerSOS(orderId, location): Promise<EmergencyResponse>
+  +verifyPlateNumber(orderId, plate): Promise<boolean>
+  +notifyFamily(orderId, event): Promise<void>
 }
 
 class HomeScreen {
@@ -56,15 +68,28 @@ class HomeScreen {
 
 class VoiceBookingScreen {
   -destination: string
+  -candidates: Destination[]
   -showConfirm: boolean
   -isBooking: boolean
   +handleVoiceResult(text): void
+  +handleCandidateSelect(): void
   +handleConfirmBooking(): void
+}
+
+class QRBookingScreen {
+  +scanQRCode(): void
+  +handleStationBooking(stationId): void
+}
+
+class HotlineBookingScreen {
+  +dial95128(): void
 }
 
 class RideStatusScreen {
   -driver: DriverInfo
   -status: 'matching' | 'assigned' | 'arriving' | 'arrived'
+  -plateVerified: boolean
+  +handlePlateVerify(plate): void
 }
 
 class FamilyPayScreen {
@@ -80,7 +105,7 @@ class SettingsScreen {
 
 class ElderlyButton {
   +onPress: () => void
-  +variant: 'primary' | 'secondary' | 'danger' | 'back'
+  +variant: 'primary' | 'secondary' | 'danger' | 'back' | 'sos'
   +size: 'large' | 'medium'
   +icon: string
   +disabled: boolean
@@ -117,6 +142,7 @@ class ElderlyModal {
   +visible: boolean
   +title: string
   +message: string
+  +variant: 'info' | 'warning' | 'danger'
   +primaryBtn: {label, onPress}
   +secondaryBtn: {label, onPress}
 }
@@ -124,6 +150,19 @@ class ElderlyModal {
 class ElderlyBottomNav {
   +items: NavItem[]
   +active: number
+}
+
+class SOSButton {
+  +onSOS(): void
+  +confirmBeforeTrigger: boolean
+  +countdownSeconds: number
+}
+
+class LiveLocationCard {
+  +tripId: string
+  +driverLocation: Location
+  +eta: number
+  +onCallDriver(): void
 }
 
 class UsabilityTestSession {
@@ -157,12 +196,19 @@ VoiceBookingScreen ..> ElderlyModal : contains
 VoiceBookingScreen ..> ElderlyButton : contains
 
 RideStatusScreen ..> ElderlyButton : contains
+RideStatusScreen ..> LiveLocationCard : contains
+RideStatusScreen ..> SOSButton : contains
 FamilyPayScreen ..> ElderlyButton : contains
 SettingsScreen ..> ElderlyButton : contains
 
 VoiceBookingScreen ..> VoiceService : uses
 VoiceBookingScreen ..> RideService : uses
 RideStatusScreen ..> VoiceService : uses
+RideStatusScreen ..> RideService : uses
+RideStatusScreen ..> SafetyService : uses
+
+QRBookingScreen ..> RideService : uses
+HotlineBookingScreen ..> RideService : uses
 
 FamilyPayScreen ..> PaymentService : uses
 
@@ -171,10 +217,22 @@ UsabilityTestSession "1" *-- "many" UsabilityTask
 note right of VoiceService
   Singleton 服务
   封装 react-native-voice
+  新增置信度返回
 end note
 
 note bottom of ElderlyThemeProvider
   全局主题上下文
   持久化到 AsyncStorage
+end note
+
+note right of SafetyService
+  新增安全服务
+  解决上错车/安全焦虑
+  紧急求助SOS
+end note
+
+note bottom of PaymentService
+  新增现金支付方法
+  适配20%现金用户
 end note
 @enduml

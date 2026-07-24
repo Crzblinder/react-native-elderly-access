@@ -12,13 +12,19 @@ actor "亲友用户\n(Family Member)" as Family #LightYellow
 rectangle "适老化打车平台\n(Elderly Taxi Platform)" {
     usecase "UC1: 一键叫车\n(One-Tap Ride)" as UC1
     usecase "UC2: 语音叫车\n(Voice Command Ride)" as UC2
-    usecase "UC3: 查看行程状态\n(Check Ride Status)" as UC3
-    usecase "UC4: 设置大字模式\n(Large Text Settings)" as UC4
-    usecase "UC5: 亲友代付\n(Family Payment)" as UC5
-    usecase "UC6: 接单\n(Accept Order)" as UC6
-    usecase "UC7: 导航\n(Navigation)" as UC7
-    usecase "UC8: 代付确认\n(Confirm Payment)" as UC8
-    usecase "UC9: 行程查看\n(View Trip History)" as UC9
+    usecase "UC3: 扫码叫车\n(Scan QR Code Ride)" as UC3
+    usecase "UC4: 电话叫车\n(Hotline Ride)" as UC4
+    usecase "UC5: 查看行程状态\n(Check Ride Status)" as UC5
+    usecase "UC6: 设置大字模式\n(Large Text Settings)" as UC6
+    usecase "UC7: 亲友代付\n(Family Payment)" as UC7
+    usecase "UC8: 现金支付\n(Cash Payment)" as UC8
+    usecase "UC9: 行程安全守护\n(Trip Safety Guard)" as UC9
+    usecase "UC10: 紧急求助\n(Emergency SOS)" as UC10
+    usecase "UC11: 就医优先派单\n(Medical Priority Dispatch)" as UC11
+    usecase "UC12: 接单\n(Accept Order)" as UC12
+    usecase "UC13: 导航\n(Navigation)" as UC13
+    usecase "UC14: 代付确认\n(Confirm Payment)" as UC14
+    usecase "UC15: 行程查看/管理\n(View Trip History)" as UC15
 }
 
 Elderly --> UC1
@@ -26,24 +32,43 @@ Elderly --> UC2
 Elderly --> UC3
 Elderly --> UC4
 Elderly --> UC5
+Elderly --> UC6
+Elderly --> UC7
+Elderly --> UC8
+Elderly --> UC9
+Elderly --> UC10
+Elderly --> UC11
 
-Driver --> UC6
-Driver --> UC7
+Driver --> UC12
+Driver --> UC13
 
-Family --> UC8
 Family --> UC9
+Family --> UC14
+Family --> UC15
 
-UC5 ..> UC8 : <<include>>
-UC3 ..> UC9 : <<extend>>
+UC7 ..> UC14 : <<include>>
+UC9 ..> UC15 : <<extend>>
 
 note right of UC2
   支持语音指令：
   - "我要打车回家"
   - "打车去[地点]"
   - "取消叫车"
+  - 新增：低置信度候选列表
 end note
 
-note bottom of UC4
+note right of UC3
+  暖心车站/社区二维码
+  线下场景入口
+  降低APP使用门槛
+end note
+
+note right of UC4
+  95128热线/客服代叫
+  服务无智能手机老人
+end note
+
+note bottom of UC6
   字体缩放 1.0x - 2.0x
   高对比度模式
 end note
@@ -51,5 +76,17 @@ end note
 note bottom of UC1
   预填家庭地址
   一键完成叫车
+end note
+
+note right of UC9
+  实时位置共享给亲友
+  上车前车牌号校验
+  解决"上错车"焦虑
+end note
+
+note right of UC10
+  SOS一键求助
+  110/120联动
+  行程录音启动
 end note
 @enduml
