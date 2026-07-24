@@ -1,7 +1,7 @@
 # Accessibility & Elderly-Friendly Design Guide
 
 Research-driven design principles for building React Native applications targeting users aged 60+.
-Based on usability research with 200+ elderly participants and 3 rounds of iterative testing.
+Based on usability research with 200+ elderly participants, 3 rounds of iterative testing, and competitive benchmarking against Didi Elderly Mode (滴滴长辈版), Amap Assisted Ride (高德助老打车), and 95128 hotline.
 
 ---
 
@@ -65,20 +65,38 @@ Semi-structured interviews to uncover emotional and contextual factors:
 | "不知道车在哪"                | Real-time status with large text, voice announce    | P1       |
 | "界面跳太快跟不上"            | Transitions ≤ 300ms; no auto-dismiss toasts         | P2       |
 
+**New & Stubborn Pain Points (from Competitive Benchmarking)**
+
+| Pain Point                    | Evidence %       | Emotional Driver                        | Translated Requirement                              | Priority |
+|-------------------------------|------------------|-----------------------------------------|-----------------------------------------------------|----------|
+| P1 怕上错车                    | 52%              | Fear, avoidance                         | 车牌号校验 before boarding                          | P0       |
+| P2 行程安全焦虑                | 52%              | Fear (71岁老人独乘出租车去世案例)        | 亲友实时位置 + SOS + 行程录音                       | P0       |
+| P3 只能用现金                  | 20%              | Exclusion                               | 现金支付 + 司机端确认                               | P1       |
+| P4 就医打车难                  | —                | Anxiety (滴滴已验证20.2万次就医派单)     | 医院目的地优先派单                                  | P1       |
+| P5 不会用智能手机              | 34%              | Exclusion                               | QR车站扫码 + 95128热线入口                          | P1       |
+| P6 等太久没人接                | —                | Frustration, abandonment                | 3分钟无单自动扩范围 + TTS播报                       | P1       |
+| P7 语音识别歧义                | —                | Confusion                               | 低置信度候选列表 + 保存地址别名                     | P2       |
+
 ---
 
 ## 2. User Journey Map Template
 
 ```
-Stage        | User Action              | Touchpoint           | Emotion    | Opportunity
--------------|--------------------------|----------------------|------------|------------------
-Awareness    | Needs to go somewhere    | Physical context     | Neutral    | —
-Decision     | Opens app                | Home screen          | Anxious    | Simplify entry
-Input        | Enters destination       | Search/Voice input   | Frustrated | Voice-first input
-Confirmation | Reviews fare & route     | Confirm modal        | Uncertain  | Large, clear summary
-Waiting      | Waits for driver         | Status screen        | Impatient  | Voice updates, ETA
-Arrival      | Identifies car           | Physical + app       | Relieved   | Large plate number
-Payment      | Pays for trip            | Payment screen       | Confused   | Family delegation
+Stage           | User Action              | Touchpoint           | Emotion    | Opportunity
+----------------|--------------------------|----------------------|------------|------------------
+Awareness       | Needs to go somewhere    | Physical context     | Neutral    | —
+Decision (APP)  | Opens app, 语音/一键打车  | Home screen          | Anxious    | Simplify entry, voice-first
+Decision (QR)   | Scans QR at station      | QR车站扫码           | Anxious    | One-scan booking, no app needed
+Decision (Hotline) | Calls 95128          | 95128热线            | Anxious    | Operator-assisted booking
+Input           | Enters destination       | Search/Voice input   | Frustrated | Voice-first, saved-address alias
+Confirmation    | Reviews fare & route     | Confirm modal        | Uncertain  | Large, clear summary
+Waiting         | Waits for driver         | Status screen        | Impatient  | Voice updates, ETA, 3-min auto-expand
+Safety Guard    | Verifies car before boarding | Plate check + family share | Cautious | 车牌号校验 + 亲友实时位置共享
+Arrival         | Identifies car           | Physical + app       | Relieved   | Large plate number
+In-Trip         | Riding to destination    | In-car               | Varies     | Trip recording
+Emergency (branch) | Triggers SOS         | SOS button           | Fear       | 110/120 + 位置共享 + 行程录音
+Payment         | Pays for trip            | Payment screen       | Confused   | Family delegation, cash + driver confirm
+Post-Trip Care  | Trip ends, follow-up     | Receipt + notification | Relieved  | 医院到达通知 + 行程记录
 ```
 
 Map emotions to design responses at each stage.
@@ -177,7 +195,7 @@ After every major action, provide TTS feedback:
 
 - **Participants**: 10 target users (age 60+, mixed tech comfort)
 - **Environment**: Quiet room, user's own device preferred
-- **Tasks**: 5 core tasks, ordered by complexity
+- **Tasks**: 10 core tasks, ordered by complexity
 
 ### Core Task List
 
@@ -188,6 +206,11 @@ After every major action, provide TTS feedback:
 | T3      | 查看司机位置                | User locates status screen           |
 | T4      | 修改字体大小                | Font size changed and saved          |
 | T5      | 使用亲友代付                | Payment link sent to contact         |
+| T6      | 扫码叫车 (QR station booking) | Ride booked via QR station scan     |
+| T7      | 95128热线叫车 (hotline booking) | Ride booked via 95128 hotline    |
+| T8      | 车牌号校验 (plate verification) | Plate verified before boarding     |
+| T9      | 紧急求助SOS (SOS trigger)  | SOS triggers 110/120 + location share |
+| T10     | 现金支付 (cash payment)    | Cash payment confirmed by driver     |
 
 ### Data Collection
 

@@ -1,7 +1,7 @@
 {
   "name": "react-native-elderly-access",
   "version": "1.0.0",
-  "description": "Qoder Agent Skill for building accessible, elderly-friendly React Native applications. Includes component templates, design guidelines, accessibility audit tools, and usability testing methodology derived from research with 200+ senior users.",
+  "description": "Qoder Agent Skill for building accessible, elderly-friendly React Native applications. Includes 10 core modules (one-tap ride, voice booking, QR station, 95128 hotline, large text, family payment, trip safety guard, SOS, cash/online payment, medical priority dispatch), competitive analysis, component templates, accessibility audit tools, and usability testing methodology derived from research with 200+ senior users.",
   "keywords": [
     "react-native",
     "accessibility",
@@ -14,7 +14,21 @@
     "large-text",
     "senior-ux",
     "wcag",
-    "inclusive-design"
+    "inclusive-design",
+    "safety",
+    "sos",
+    "emergency",
+    "qr-booking",
+    "qr-code",
+    "hotline",
+    "95128",
+    "medical-priority",
+    "cash-payment",
+    "family-payment",
+    "competitive-analysis",
+    "taxi",
+    "ride-hailing",
+    "打车"
   ],
   "homepage": "https://github.com/YOUR_USERNAME/react-native-elderly-access#readme",
   "bugs": {

@@ -34,7 +34,11 @@ Use the [Feature Request template](.github/ISSUE_TEMPLATE/feature-request.md) an
 - Include `accessibilityLabel` and `accessibilityRole` on all interactive elements
 - Include `hitSlop` on icon/small buttons
 - Add JSDoc comments to new components
-- Keep SKILL.md under 500 lines; put detailed content in reference files
+- Keep SKILL.md focused; put detailed module specs in prd.md and component APIs in reference.md
+
+### Contribution Scope & Priority Areas
+
+Contributions should align with the 10-module scope defined in prd.md. Priority areas include: trip safety guard, emergency SOS, multi-entry booking (QR/hotline), medical priority dispatch, and cash payment support — these address competitive gaps identified in our analysis of Didi Elderly Mode, Amap Assisted Ride, and 95128 hotline.
 
 ### Adding a New Component Type
 
@@ -42,6 +46,17 @@ Use the [Feature Request template](.github/ISSUE_TEMPLATE/feature-request.md) an
 2. Add API documentation in `reference.md`
 3. Add a usage example in `examples.md`
 4. Verify the component passes `scripts/check-a11y.js`
+
+#### Pending Components to Complete
+
+The following components are not yet implemented and need contributor help to fill in. They map to the 10-module scope and the competitive gaps noted above:
+
+- `SafetyService` — trip safety service (real-time route monitoring, abnormal-stop detection, auto-shared trip status with family)
+- `SOSButton` — emergency help button (one-tap dial to 110/120/family, with location push)
+- `LiveLocationCard` — live location card (real-time driver/vehicle location and ETA display for family members)
+- `QRBookingScreen` — QR code booking screen (scan-to-hail at stations, hospitals, community gates)
+- `HotlineBookingScreen` — 95128 hotline booking screen (operator-assisted order placement, dual-tone fallback)
+- `PaymentService.cashPay()` — cash payment method (offline cash settlement, driver-side confirmation, receipt printing)
 
 ### Writing Documentation
 

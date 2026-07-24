@@ -15,7 +15,7 @@
 - [What Is This?](#what-is-this)
 - [Tech Stack](#tech-stack)
 - [Architecture & Implementation](#architecture--implementation)
-- [Business Logic — Four Core Modules](#business-logic--four-core-modules)
+- [Business Logic — Core Modules](#business-logic--core-modules)
 - [Design System & Tuning](#design-system--tuning)
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
@@ -34,11 +34,12 @@ This project is a **Qoder Agent Skill** — a structured knowledge package that 
 | Deliverable | What It Does |
 |-------------|-------------|
 | **SKILL.md** (368 lines) | Core instructions the agent reads — design constraints, component patterns, screen templates |
-| **prd.md** (225 lines) | Complete Product Requirements Document with functional specs and acceptance criteria |
+| **prd.md** (375+ lines) | Complete PRD with competitive analysis, 10 modules, non-functional requirements, usability data |
 | **reference.md** (272 lines) | Component API reference (7 components with full prop tables) |
 | **examples.md** (573 lines) | 6 production-ready screen implementations + usability test data model |
 | **accessibility-guide.md** (250 lines) | User research methodology, design specs, usability testing protocol |
 | **assets/architecture-diagram.md** | UML diagrams: use case, sequence, class, business flow, component architecture |
+| **uml-output/** | PlantUML sources + rendered PNGs for all 5 UML diagram types |
 | **scripts/check-a11y.js** (364 lines) | CLI tool that scans your RN project for 7 categories of accessibility violations |
 | **scripts/gen-component.js** (662 lines) | CLI tool that scaffolds 7 types of elderly-friendly components |
 
@@ -82,29 +83,37 @@ This project is a **Qoder Agent Skill** — a structured knowledge package that 
 ### System Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   Application Layer                       │
-│  ┌───────────┐  ┌────────────┐  ┌───────────────────┐   │
-│  │ HomeScreen │  │ VoiceBooking│  │ RideStatusScreen  │   │
-│  │ (One-Tap)  │  │ (Voice)     │  │ (Real-time)       │   │
-│  └─────┬─────┘  └──────┬─────┘  └────────┬──────────┘   │
-│        │               │                  │               │
-│  ┌─────┴───────────────┴──────────────────┴──────────┐   │
-│  │          Elderly UI Component Library              │   │
-│  │  ElderlyButton │ OneTapCard │ LargeText            │   │
-│  │  ElderlyModal  │ VoiceInput │ ElderlyBottomNav     │   │
-│  └───────────────────────┬───────────────────────────┘   │
-│                          │                                │
-│  ┌───────────────────────┴───────────────────────────┐   │
-│  │               Service Layer                        │   │
-│  │  VoiceService (STT/TTS) │ RideService │ PayService │   │
-│  └───────────────────────┬───────────────────────────┘   │
-│                          │                                │
-│  ┌───────────────────────┴───────────────────────────┐   │
-│  │           Theme & State Management                │   │
-│  │  ElderlyThemeProvider (React Context) │ AsyncStorage│   │
-│  └───────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                      Application Layer                         │
+│  ┌─────────┐ ┌──────────┐ ┌─────────┐ ┌─────────┐ ┌────────┐ │
+│  │HomeScr  │ │VoiceBook │ │QRBooking│ │Hotline  │ │RideStat│ │
+│  │(One-Tap)│ │(Voice)   │ │(Scan)   │ │(95128)  │ │+SOS    │ │
+│  └────┬────┘ └────┬─────┘ └────┬────┘ └────┬────┘ └───┬────┘ │
+│       │           │            │           │           │      │
+│  ┌────┴───────────┴────────────┴───────────┴───────────┴────┐│
+│  │            Elderly UI Component Library                   ││
+│  │ ElderlyButton│OneTapCard│LargeText│ElderlyModal           ││
+│  │ VoiceInput   │BottomNav │SOSButton│LiveLocationCard      ││
+│  └────────────────────────┬──────────────────────────────────┘│
+│                           │                                    │
+│  ┌────────────────────────┴──────────────────────────────────┐│
+│  │                   Service Layer                            ││
+│  │ VoiceService(STT/TTS)│RideService│PaymentService          ││
+│  │ SafetyService(NEW)    │  - Medical Priority Dispatch       ││
+│  │                       │  - Auto-Expand Match Range        ││
+│  └────────────────────────┬──────────────────────────────────┘│
+│                           │                                    │
+│  ┌────────────────────────┴──────────────────────────────────┐│
+│  │              Theme & State Management                      ││
+│  │ ElderlyThemeProvider (React Context) │ AsyncStorage         ││
+│  └───────────────────────────────────────────────────────────┘│
+└──────────────────────────────────────────────────────────────┘
+         │              │              │
+   ┌─────┴─────┐  ┌──────┴──────┐ ┌────┴──────────┐
+   │Speech API │  │ Ride Backend│ │ Emergency API  │
+   │TTS API    │  │ Payment GW  │ │ (110/120)      │
+   │QR Scanner │  │ SMS Service │ │ Hotline 95128  │
+   └───────────┘  └─────────────┘ └───────────────┘
 ```
 
 ### Implementation Patterns
@@ -148,9 +157,18 @@ User runs: node scripts/check-a11y.js ./src → validates output
 
 ---
 
-## Business Logic — Four Core Modules
+## Business Logic — Core Modules
 
-The skill encodes the complete business logic for an elderly-friendly taxi platform, designed from real user research.
+The skill encodes the complete business logic for an elderly-friendly taxi platform, designed from real user research and competitive benchmarking against Didi Elderly Mode, Amap Assisted Ride, and the 95128 hotline.
+
+### Competitive Differentiation
+
+| Competitor | Core Strength | Key Gap We Fill |
+|------------|---------------|-----------------|
+| **滴滴长辈版** | Medical priority dispatch (202k+ verified); cash payment | No trip safety guard; no SOS emergency |
+| **高德助老打车** | QR-code station booking; multi-city coverage | Weak family monitoring; no medical priority |
+| **95128热线** | Serves non-smartphone seniors via human agent | No real-time tracking; no digital safety features |
+| **本项目** | Voice-first + 3-tap + multi-entry + safety guard + cash + family pay | Needs backend integration with real dispatch platforms |
 
 ### Module 1: One-Tap Ride (一键叫车)
 
@@ -174,10 +192,10 @@ Total: 2 taps
 ### Module 2: Voice Command Ride (语音指令叫车)
 
 **Problem**: 68% couldn't type addresses on small screens.
-**Solution**: Voice-first UI with Mandarin Chinese NLP intent mapping.
+**Solution**: Voice-first UI with Mandarin Chinese NLP intent mapping + confidence scoring.
 
 ```
-User Flow: [Tap Mic] → [Speak "打车去北京站"] → [See transcript] → [Confirm] → [Booked]
+User Flow: [Tap Mic] → [Speak "打车去北京站"] → [See transcript + confidence] → [Confirm] → [Booked]
 Total: 2 taps + 1 voice command
 ```
 
@@ -191,9 +209,30 @@ Total: 2 taps + 1 voice command
 | "取消叫车" / "不要了" | `CANCEL_RIDE` | Cancel current order |
 | "车到哪了" / "还要多久" | `CHECK_STATUS` | Show driver location |
 
-**Components**: `<ElderlyVoiceInput>` + `VoiceService` (singleton) + `parseVoiceIntent()` utility.
+**Confidence-aware fallback**: When recognition confidence < 0.8, show candidate list as large-text cards instead of auto-filling.
 
-### Module 3: Large Text Mode (大字模式)
+**Components**: `<ElderlyVoiceInput>` + `VoiceService` (singleton) + `parseVoiceIntent()` + `recognizeWithConfidence()`.
+
+### Module 3: QR Code Station Booking (扫码叫车)
+
+**Problem**: 34% of target users cannot use smartphones (inspired by 高德暖心车站).
+**Solution**: Offline QR-code station entry — scan, auto-locate, confirm.
+
+```
+User Flow: [At warm station] → [Scan QR code] → [Auto-locate station] → [Confirm] → [Ride Booked]
+Total: 1 scan + 1 confirm
+```
+
+**Components**: `QRBookingScreen` + `QR Code Scanner` (camera integration).
+
+### Module 4: Hotline 95128 Booking (电话叫车)
+
+**Problem**: Non-smartphone seniors excluded from ride-hailing.
+**Solution**: One-tap dial 95128 hotline; agent creates order on behalf of senior.
+
+**Components**: `HotlineBookingScreen` + `Hotline 95128` (tel: link).
+
+### Module 5: Large Text Mode (大字模式)
 
 **Problem**: 85% reported "text too small to read".
 **Solution**: In-app font scale toggle (1.0x – 2.0x), persisted preference.
@@ -206,7 +245,7 @@ Total: 2 taps + 1 voice command
 
 **Component**: `<LargeText>` — auto-scales based on `fontScale` from `ElderlyThemeProvider`, respects system Dynamic Type / Android font scale.
 
-### Module 4: Family Payment (亲友代付)
+### Module 6: Family Payment (亲友代付)
 
 **Problem**: 61% found mobile payment confusing or anxiety-inducing.
 **Solution**: SMS-based payment delegation to family members.
@@ -217,6 +256,56 @@ Flow: [Trip ends] → [Tap "发给家人代付"] → [Pick contact] → [SMS sen
 ```
 
 **Components**: `FamilyPayButton` (contact picker + SMS), `PaymentStatusCard` (real-time tracking), `PaymentConfirmScreen` (family member view).
+
+### Module 7: Trip Safety Guard (行程安全守护)
+
+**Problem**: 52% fear getting in wrong car; news of seniors entering wrong vehicles.
+**Solution**: Real-time family location sharing + plate-number verification before boarding.
+
+| Feature | Spec |
+|---------|------|
+| Family trip notification | Auto-notify family when ride starts, with live location link |
+| Real-time location sharing | Family views driver location and ETA during trip |
+| Plate verification | Before boarding, user confirms plate; mismatch triggers warning + family alert |
+| Family call driver | One-tap call driver from family link |
+| Trip recording | Auto-start audio recording during SOS or opt-in |
+
+**Components**: `SafetyService` + `<LiveLocationCard>` + `<SOSButton>` + `verifyPlateNumber()`.
+
+### Module 8: Emergency SOS (紧急求助)
+
+**Problem**: 71-year-old died alone in taxi; seniors fear traveling alone.
+**Solution**: Long-press SOS → auto-dial 110/120 + location broadcast to family + recording start.
+
+```
+Flow: [Long-press SOS 3s] → [Auto-dial 110/120] → [Location shared with family] → [Recording starts]
+      → [Large-text confirmation: "已为您呼叫帮助"]
+```
+
+**Components**: `<SOSButton>` (countdown + confirm) + `SafetyService.triggerSOS()`.
+
+### Module 9: Payment Methods (支付方式)
+
+**Problem**: ~20% of elderly only use cash (validated by Didi data).
+**Solution**: Three payment options — online self-pay / cash / family delegation.
+
+| Method | Flow |
+|--------|------|
+| Online self-pay | One-tap WeChat/Alipay |
+| Cash payment | User selects "现金支付"; driver confirms receipt |
+| Family payment | Generate link → SMS to family → one-tap confirm |
+
+### Module 10: Medical Priority Dispatch (就医优先派单)
+
+**Problem**: Medical trips hard to book; Didi verified 202k medical priority dispatches.
+**Solution**: Hospital-destination detection triggers priority driver matching.
+
+| Feature | Spec |
+|---------|------|
+| Hospital detection | Detect hospital keyword or POI category |
+| Priority matching | Boost nearby driver weight; reduce wait time |
+| Arrival notification | Notify family when senior arrives at hospital |
+| Auto-expand range | If no driver in 3 min, expand radius + TTS announcement |
 
 ---
 
@@ -277,7 +366,7 @@ react-native-elderly-access/
 │
 ├── prd.md                          # [Product] Complete PRD
 │                                   #   User research findings, functional requirements
-│                                   #   for all 4 modules, non-functional requirements,
+│                                   #   for all 10 modules, non-functional requirements,
 │                                   #   3-round usability test data
 │
 ├── reference.md                    # [API] Component reference
@@ -295,9 +384,23 @@ react-native-elderly-access/
 │                                   #   three-dimensional evaluation model
 │
 ├── assets/
-│   └── architecture-diagram.md     # [Architecture] UML diagrams
+│   └── architecture-diagram.md     # [Architecture] UML diagrams (ASCII)
 │                                   #   Use case, business flow, sequence,
 │                                   #   class, component architecture
+│
+├── uml-output/                     # [UML] PlantUML source + rendered PNG
+│   ├── 01-use-case.puml            #   Use case diagram (15 UCs, 3 actors)
+│   ├── 01-use-case.png             #   Rendered PNG
+│   ├── 02-business-flow.puml       #   Original activity diagram
+│   ├── 02-business-flow-enhanced.puml #  Enhanced: safety guard, SOS, cash, medical
+│   ├── 02-business-flow-enhanced.png  #  Rendered PNG
+│   ├── 03-sequence-voice-booking.puml #  Sequence diagram (7 phases, 6 participants)
+│   ├── 03-sequence-voice-booking.png  #  Rendered PNG
+│   ├── 04-class-diagram.puml       #   Class diagram (20+ classes)
+│   ├── 04-class-diagram.png        #   Rendered PNG
+│   ├── 05-component-architecture.puml # Component diagram
+│   ├── 05-component-architecture.png  # Rendered PNG
+│   └── render-png.ps1              #   Batch render script (PowerShell)
 │
 ├── scripts/
 │   ├── check-a11y.js               # [Tool] Accessibility audit (7 rules)
@@ -512,11 +615,13 @@ This skill was born from a real product design project:
 >
 > 1. **User Research**: Designed a mixed-method survey + deep interview study covering 200+ elderly users. Used persona modeling and journey mapping to translate emotional pain points ("too complex", "text too small") into quantifiable engineering requirements ("reduce decision nodes", "enlarge touch targets").
 >
-> 2. **Vibe Coding Prototype**: Using Qoder + Claude Code, independently built a high-fidelity interactive prototype of the elderly taxi app (voice booking, one-tap ride, large text mode) in 48 hours. Used directly for user testing and team reviews, compressing prototype iteration from 2 weeks to 3 days.
+> 2. **Competitive Analysis**: Benchmarked against Didi Elderly Mode, Amap Assisted Ride, and 95128 hotline. Identified 7 new/stubborn pain points (wrong car, safety anxiety, cash exclusion, medical trips, no smartphone, long wait, voice ambiguity) and designed corresponding solutions (plate verification, SOS guard, cash payment, medical priority, QR/hotline entry, auto-expand range, confidence-aware voice).
 >
-> 3. **System Modeling**: Completed full UML stack modeling (business flow, sequence, use case, class diagrams). Designed four modules: One-Tap Ride, Voice Command Ride, Large Text Mode, Family Payment. Delivered complete PRD and functional specification.
+> 3. **Vibe Coding Prototype**: Using Qoder + Claude Code, independently built a high-fidelity interactive prototype of the elderly taxi app (voice booking, one-tap ride, large text mode) in 48 hours. Used directly for user testing and team reviews, compressing prototype iteration from 2 weeks to 3 days.
 >
-> 4. **Validation**: Organized usability testing with 10 target users. Established a three-dimensional evaluation model (completion rate × task time × satisfaction). Through 3 rounds of iteration, reduced average ride-hailing time by over 1 minute and achieved 92% user satisfaction.
+> 4. **System Modeling**: Completed full UML stack modeling — use case (15 UCs, 3 actors), business flow (enhanced with safety guard, SOS, cash, medical priority), sequence (7 phases, 6 participants), class (20+ classes including SafetyService), component architecture. All PlantUML sources and rendered PNGs included in `uml-output/`.
+>
+> 5. **Validation**: Organized usability testing with 10 target users. Established a three-dimensional evaluation model (completion rate × task time × satisfaction). Through 3 rounds of iteration, reduced average ride-hailing time by over 1 minute and achieved 92% user satisfaction.
 
 ---
 

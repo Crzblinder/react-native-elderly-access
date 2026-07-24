@@ -2,16 +2,34 @@
 name: react-native-elderly-access
 description: >
   Build accessible, elderly-friendly React Native applications with large text mode,
-  voice interaction, one-tap operations, and simplified navigation. Use when developing
-  React Native apps targeting elderly users, implementing accessibility features,
-  creating voice-first interfaces, or when the user mentions 适老化, 无障碍, elderly-friendly,
-  accessibility, large text, voice commands, one-tap actions, or senior UX design.
+  voice interaction, one-tap operations, multi-entry booking (app/QR/95128 hotline),
+  trip safety guard, emergency SOS, family/cash payment, and medical priority dispatch.
+  Use when developing React Native apps targeting elderly users, implementing accessibility
+  features, creating voice-first interfaces, or when the user mentions 适老化, 无障碍,
+  elderly-friendly, accessibility, large text, voice commands, one-tap actions, 安全守护,
+  SOS, 扫码叫车, 95128, or senior UX design.
 ---
 
 # React Native Elderly Access Skill
 
 Build React Native applications optimized for elderly users. This skill provides components,
 patterns, and best practices derived from real-world usability research with 200+ senior users.
+
+## Competitive Landscape
+
+This skill is informed by benchmarking against existing elderly ride-hailing solutions in China.
+Each module below closes a gap left by the current market.
+
+| Competitor | Strength | Key Gap We Address |
+|------------|----------|---------------------|
+| **滴滴长辈版** | Medical priority dispatch (202k+ verified dispatches); cash payment | No trip safety guard; no SOS emergency |
+| **高德助老打车** | QR-code station booking; multi-city offline "warm stations" | Weak family monitoring; no medical priority |
+| **95128热线** | Serves non-smartphone seniors via human agent | No real-time tracking; no digital safety features |
+
+**Our differentiation**: multi-entry booking (APP voice + QR station + 95128 hotline), trip safety
+guard (family live location + plate verification + SOS), and cash + digital payment — covering the
+~20% cash-only elderly population that competitors under-serve. See [prd.md](prd.md) §3 for the
+full competitive analysis and pain-point evidence.
 
 ## Core Design Constraints
 
@@ -77,56 +95,99 @@ Always prefer these over standard RN components:
 | `TouchableOpacity` | `<OneTapCard>`            | Single-tap action, large hit area        |
 | `Modal`            | `<ElderlyModal>`          | Simplified actions, no nested scrolling  |
 
-## Module 1: Large Text Mode (大字模式)
+**Specialized components** for the extended modules (see each module section for usage):
 
-Generate components that respect the user's font size preference and provide an in-app toggle.
+- `QRBookingScreen` — QR station scan → station resolve → confirm (Module 3)
+- `HotlineBookingScreen` — one-tap 95128 dial + SMS confirmation display (Module 4)
+- `SafetyService` — orchestrates family notifications, live location sharing, plate verification (Module 7)
+- `LiveLocationCard` — family-facing real-time driver location + ETA (Module 7)
+- `SOSButton` — long-press 3s gesture, large red target, haptic + visual confirmation (Module 8)
+- `FamilyPayButton` / `PaymentStatusCard` / `PaymentConfirmScreen` — family delegation flow (Module 6)
 
-### LargeText Component
+## Module 1: One-Tap Ride (一键叫车)
+
+**Problem**: Multi-step booking causes 78% of seniors to abandon. **Solution**: Pre-save the home
+address, then book with a single tap + confirmation. Total: 2 taps (with pre-configured home).
+**Key constraint**: If no home address is set, block the button with a "先设置家庭地址" prompt.
+
+### OneTapCard Component
 
 ```typescript
 import React from 'react';
-import { Text, StyleSheet, useWindowDimensions } from 'react-native';
-import { useElderlyTheme } from '../theme/ElderlyThemeProvider';
+import { TouchableOpacity, View, StyleSheet, Vibration } from 'react-native';
+import { LargeText } from './LargeText';
+import { Icon } from './Icon';
 
-interface LargeTextProps {
-  variant?: 'heading' | 'body' | 'caption';
-  children: React.ReactNode;
-  style?: object;
+interface OneTapCardProps {
+  title: string;
+  subtitle?: string;
+  icon?: string;
+  onPress: () => void;
+  disabled?: boolean;
 }
 
-export const LargeText: React.FC<LargeTextProps> = ({ variant = 'body', children, style }) => {
-  const { fontScale, largeTextMode } = useElderlyTheme();
-  const { width } = useWindowDimensions();
-
-  const baseSize = { heading: 28, body: 20, caption: 16 }[variant];
-  const fontSize = largeTextMode ? baseSize * fontScale : baseSize;
+export const OneTapCard: React.FC<OneTapCardProps> = ({
+  title, subtitle, icon, onPress, disabled = false,
+}) => {
+  const handlePress = () => {
+    Vibration.vibrate(50); // Haptic confirmation
+    onPress();
+  };
 
   return (
-    <Text
-      style={[styles.text, { fontSize, lineHeight: fontSize * 1.5 }, style]}
-      accessibilityRole={variant === 'heading' ? 'header' : 'text'}
-      maxFontSizeMultiplier={2.0}
+    <TouchableOpacity
+      style={[styles.card, disabled && styles.disabled]}
+      onPress={handlePress}
+      disabled={disabled}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}${subtitle ? `, ${subtitle}` : ''}`}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
-      {children}
-    </Text>
+      {icon && <Icon name={icon} size={40} color="#1565C0" />}
+      <LargeText variant="heading" style={styles.title}>{title}</LargeText>
+      {subtitle && <LargeText variant="caption">{subtitle}</LargeText>}
+    </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
-  text: { color: '#1A1A1A', fontWeight: '500' },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    minHeight: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  disabled: { opacity: 0.4, backgroundColor: '#E0E0E0' },
+  title: { textAlign: 'center', fontWeight: '700' },
 });
 ```
 
-### Font Size Toggle Screen
+### One-Tap Ride Home Screen
 
-Provide a settings screen with a slider:
-- Range: 16sp – 32sp
-- Preview text shown below slider in real time
-- Persist preference with `@react-native-async-storage/async-storage`
+```typescript
+// Pre-configured: user's home address is stored, one tap books ride
+<OneTapCard
+  title="一键打车回家"
+  subtitle="幸福小区 3号楼"
+  icon="home"
+  onPress={() => bookRide({ destination: savedAddresses.home })}
+/>
+```
 
-## Module 2: Voice Interaction (语音叫车)
+## Module 2: Voice Command Ride (语音指令叫车)
 
-Voice is the **primary** interaction mode for elderly users. Always design voice-first.
+**Problem**: 68% of seniors cannot type addresses. **Solution**: Voice is the **primary**
+interaction mode. Map natural language to intents; when confidence < 0.8, show a candidate list.
+**Key constraint**: Always show a "不方便说话？手动输入" manual fallback.
 
 ### Voice Command Flow
 
@@ -207,86 +268,78 @@ Map natural language to actions:
 | "取消叫车"                  | `CANCEL_RIDE`       | Cancel current booking     |
 | "我的车到哪了"              | `CHECK_STATUS`      | Show driver location       |
 
-## Module 3: One-Tap Operation (一键叫车)
+## Module 3: QR Code Station Booking (扫码叫车)
 
-Minimize decision nodes. Primary actions should complete in a single tap.
+**Problem**: 34% of target users cannot use smartphone apps. **Solution**: At offline "warm
+stations", scan a QR code to auto-locate the station, then confirm with one tap. Total: 1 scan + 1
+confirm.
+**Key components**: `QRBookingScreen` (camera scan → station GPS resolve → large-text confirm).
+**Key constraint**: If destination is unclear, default to "最近医院" or saved home.
+**Details**: see [prd.md](prd.md) Module 3.
 
-### OneTapCard Component
+## Module 4: Hotline 95128 Booking (电话叫车)
+
+**Problem**: Non-smartphone seniors have no digital entry. **Solution**: One-tap dial 95128 from
+the app; the operator creates the order on the senior's behalf. Also reachable from any phone.
+**Key components**: `HotlineBookingScreen` (one-tap dial button + SMS confirmation display).
+**Key constraint**: Booking confirmation SMS must be in large, plain text (no deep links the
+senior cannot open).
+**Details**: see [prd.md](prd.md) Module 4.
+
+## Module 5: Large Text Mode (大字模式)
+
+**Problem**: 85% of seniors report text too small. **Solution**: Default body ≥ 18sp, headings
+≥ 24sp; in-app font scale slider 1.0x–2.0x with live preview. Never truncate text with "...".
+**Key constraint**: Honor Android/iOS system font scale; persist preference to AsyncStorage.
+
+### LargeText Component
 
 ```typescript
 import React from 'react';
-import { TouchableOpacity, View, StyleSheet, Vibration } from 'react-native';
-import { LargeText } from './LargeText';
-import { Icon } from './Icon';
+import { Text, StyleSheet, useWindowDimensions } from 'react-native';
+import { useElderlyTheme } from '../theme/ElderlyThemeProvider';
 
-interface OneTapCardProps {
-  title: string;
-  subtitle?: string;
-  icon?: string;
-  onPress: () => void;
-  disabled?: boolean;
+interface LargeTextProps {
+  variant?: 'heading' | 'body' | 'caption';
+  children: React.ReactNode;
+  style?: object;
 }
 
-export const OneTapCard: React.FC<OneTapCardProps> = ({
-  title, subtitle, icon, onPress, disabled = false,
-}) => {
-  const handlePress = () => {
-    Vibration.vibrate(50); // Haptic confirmation
-    onPress();
-  };
+export const LargeText: React.FC<LargeTextProps> = ({ variant = 'body', children, style }) => {
+  const { fontScale, largeTextMode } = useElderlyTheme();
+  const { width } = useWindowDimensions();
+
+  const baseSize = { heading: 28, body: 20, caption: 16 }[variant];
+  const fontSize = largeTextMode ? baseSize * fontScale : baseSize;
 
   return (
-    <TouchableOpacity
-      style={[styles.card, disabled && styles.disabled]}
-      onPress={handlePress}
-      disabled={disabled}
-      activeOpacity={0.7}
-      accessibilityRole="button"
-      accessibilityLabel={`${title}${subtitle ? `, ${subtitle}` : ''}`}
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    <Text
+      style={[styles.text, { fontSize, lineHeight: fontSize * 1.5 }, style]}
+      accessibilityRole={variant === 'heading' ? 'header' : 'text'}
+      maxFontSizeMultiplier={2.0}
     >
-      {icon && <Icon name={icon} size={40} color="#1565C0" />}
-      <LargeText variant="heading" style={styles.title}>{title}</LargeText>
-      {subtitle && <LargeText variant="caption">{subtitle}</LargeText>}
-    </TouchableOpacity>
+      {children}
+    </Text>
   );
 };
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
-    minHeight: 120,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-  },
-  disabled: { opacity: 0.4, backgroundColor: '#E0E0E0' },
-  title: { textAlign: 'center', fontWeight: '700' },
+  text: { color: '#1A1A1A', fontWeight: '500' },
 });
 ```
 
-### One-Tap Ride Home Screen
+### Font Size Toggle Screen
 
-```typescript
-// Pre-configured: user's home address is stored, one tap books ride
-<OneTapCard
-  title="一键打车回家"
-  subtitle="幸福小区 3号楼"
-  icon="home"
-  onPress={() => bookRide({ destination: savedAddresses.home })}
-/>
-```
+Provide a settings screen with a slider:
+- Range: 16sp – 32sp
+- Preview text shown below slider in real time
+- Persist preference with `@react-native-async-storage/async-storage`
 
-## Module 4: Family Payment (亲友代付)
+## Module 6: Family Payment (亲友代付)
 
-Allow family members to pay remotely via a simple link/SMS flow.
+**Problem**: 61% of seniors find payment too complex. **Solution**: After a trip, send an SMS/deep
+link to a family member who confirms payment in one tap. The link expires after 24 hours.
+**Key constraint**: A "自己支付" self-pay fallback must always be visible alongside the delegate option.
 
 ### Payment Flow
 
@@ -301,6 +354,45 @@ Allow family members to pay remotely via a simple link/SMS flow.
 - `FamilyPayButton`: triggers contact picker + SMS
 - `PaymentStatusCard`: shows real-time payment status (large text, clear states)
 - `PaymentConfirmScreen`: family member view — amount, trip summary, single "确认支付" button
+
+## Module 7: Trip Safety Guard (行程安全守护)
+
+**Problem**: 52% of seniors fear getting in the wrong car or traveling unsafely. **Solution**:
+Auto-notify family when a ride starts with a live location link; require plate-number verification
+before boarding; a mismatch triggers a warning.
+**Key components**: `SafetyService` (orchestrates family notifications + real-time location sharing
++ plate verification), `LiveLocationCard` (family-facing driver location + ETA view).
+**Key constraint**: Location sharing requires explicit family consent; encrypt location data in transit.
+**Details**: see [prd.md](prd.md) Module 7.
+
+## Module 8: Emergency SOS (紧急求助)
+
+**Problem**: Seniors may need urgent help mid-trip with no easy way to call. **Solution**: A
+long-press SOS button (3 seconds) auto-dials 110/120 or an emergency contact, broadcasts live
+location to family, and optionally starts trip recording.
+**Key components**: `SOSButton` (long-press gesture, large red 56dp+ target, haptic + large-text
+visual confirmation "已为您呼叫帮助").
+**Key constraint**: SOS trigger must be accidental-proof (long-press, not single tap) yet
+discoverable; always show confirmation after firing.
+**Details**: see [prd.md](prd.md) Module 8.
+
+## Module 9: Payment Methods (支付方式)
+
+**Problem**: ~20% of elderly only use cash; others prefer online or family pay. **Solution**:
+Offer three paths — online self-pay (WeChat/Alipay one-tap), cash (driver confirms receipt on
+their side), and family payment (see Module 6). Generate a large-text receipt for all methods.
+**Key constraint**: Never store card data on device; the cash flow requires a driver-side
+confirmation UI and reconciliation step.
+**Details**: see [prd.md](prd.md) Module 9.
+
+## Module 10: Medical Priority Dispatch (就医优先派单)
+
+**Problem**: Medical trips are hard to book; seniors abandon after 3 minutes without a match.
+**Solution**: Detect hospital destinations (keyword/POI category) and boost nearby driver matching
+weight to reduce wait time. Notify family when the senior arrives at the hospital.
+**Key constraint**: Trigger priority only for genuine medical POIs; if no driver matches within 3
+minutes, auto-expand the matching radius with a TTS announcement.
+**Details**: see [prd.md](prd.md) Module 10.
 
 ## Validation Checklist
 
