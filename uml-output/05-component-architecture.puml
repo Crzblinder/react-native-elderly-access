@@ -1,123 +1,356 @@
 @startuml
-title 适老化打车平台 - 组件架构图 (Component Diagram)
+title 适老化打车平台 - 深度组件架构图 (Enhanced Component Diagram)
 
-package "App Layer" {
-    [HomeScreen]
-    [VoiceBookingScreen]
-    [QRBookingScreen]
-    [HotlineBookingScreen]
-    [RideStatusScreen]
-    [FamilyPayScreen]
-    [SettingsScreen]
-    [HistoryScreen]
-    [ProfileScreen]
+skinparam package {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+  FontSize 14
 }
 
-package "Elderly UI Components" {
-    [ElderlyButton]
-    [OneTapCard]
-    [LargeText]
-    [ElderlyTextInput]
-    [ElderlyModal]
-    [ElderlyBottomNav]
-    [ElderlyVoiceInput]
-    [SOSButton]
-    [LiveLocationCard]
+skinparam component {
+  BackgroundColor #FFFFFF
+  BorderColor #1976D2
+  FontSize 13
 }
 
-package "Service Layer" {
-    [VoiceService]
-    [RideService]
-    [PaymentService]
-    [SafetyService]
+skinparam interface {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontSize 12
 }
 
-package "Theme & State" {
-    [ElderlyThemeProvider]
-    [AsyncStorage]
+skinparam database {
+  BackgroundColor #E8F5E9
+  BorderColor #2E7D32
 }
 
-package "External APIs" {
-    [Speech-to-Text API]
-    [TTS API]
-    [Ride Backend API]
-    [Payment Gateway]
-    [SMS Service]
-    [Emergency Service API]
-    [QR Code Scanner]
-    [Hotline 95128]
+' ===== 展示层 (Presentation Layer) =====
+package "展示层 (Presentation)" #E3F2FD {
+  package "屏幕 (Screens)" {
+    [HomeScreen] as HS
+    [VoiceBookingScreen] as VBS
+    [QRBookingScreen] as QBS
+    [HotlineBookingScreen] as HBS
+    [RideStatusScreen] as RSS
+    [SafetyGuardScreen] as SGS
+    [SOSEmergencyScreen] as SOS
+    [FamilyPayScreen] as FPS
+    [SettingsScreen] as SS
+    [TripHistoryScreen] as THS
+    [ProfileScreen] as PS
+  }
+
+  package "导航 (Navigation)" {
+    [ElderlyBottomNav] as EBN
+    [OnboardingFlow] as OF
+  }
+
+  package "通用组件 (UI Components)" #FFF8E1 {
+    [ElderlyButton] as EB
+    [OneTapCard] as OTC
+    [LargeText] as LT
+    [ElderlyTextInput] as ETI
+    [ElderlyModal] as EM
+    [ElderlyVoiceInput] as EVI
+    [SOSButton] as SB
+    [LiveLocationCard] as LLC
+    [QRScanner] as QRS
+    [ScreenStateHandler] as SSH
+    [FontScaleSlider] as FSS
+    [ContrastToggle] as CT
+    [AddressAutoComplete] as AAC
+  }
 }
 
-[HomeScreen] --> [OneTapCard]
-[HomeScreen] --> [ElderlyButton]
-[HomeScreen] --> [ElderlyBottomNav]
+' ===== 业务逻辑层 (Business Logic Layer) =====
+package "业务逻辑层 (Business Logic)" #E8F5E9 {
+  package "服务 (Services)" {
+    [VoiceService] as VS
+    [RideService] as RS
+    [PaymentService] as PayS
+    [SafetyService] as SafS
+    [StationService] as StS
+    [UserService] as US
+    [NotificationService] as NS
+    [LocationService] as LS
+    [POIService] as POIS
+  }
 
-[VoiceBookingScreen] --> [ElderlyVoiceInput]
-[VoiceBookingScreen] --> [ElderlyModal]
-[VoiceBookingScreen] --> [ElderlyButton]
+  package "状态管理 (State Management)" {
+    [ElderlyThemeProvider] as ETP
+    [AuthContext] as AC
+    [RideContext] as RC
+    [VoiceContext] as VC
+  }
 
-[QRBookingScreen] --> [QR Code Scanner]
-[QRBookingScreen] --> [ElderlyButton]
-[HotlineBookingScreen] --> [Hotline 95128]
+  package "工具类 (Utilities)" {
+    [parseVoiceIntent] as PVI
+    [formatCurrency] as FC
+    [maskPhoneNumber] as MPN
+    [validatePlate] as VP
+    [distanceCalculator] as DC
+    [etaEstimator] as EE
+  }
+}
 
-[RideStatusScreen] --> [ElderlyButton]
-[RideStatusScreen] --> [LiveLocationCard]
-[RideStatusScreen] --> [SOSButton]
-[RideStatusScreen] --> [ElderlyModal]
+' ===== 数据层 (Data Layer) =====
+package "数据层 (Data)" #F3E5F5 {
+  package "网络层 (Network)" {
+    [ApiClient] as APC
+    [RetryHandler] as RH
+    [OfflineQueue] as OQ
+    [AuthInterceptor] as AI
+    interface "HTTP Client" as HTTP
+    interface "WebSocket" as WS
+  }
 
-[FamilyPayScreen] --> [ElderlyButton]
-[SettingsScreen] --> [ElderlyButton]
+  package "本地存储 (Local Storage)" {
+    database "AsyncStorage" as AS {
+      [fontScale]
+      [highContrast]
+      [homeAddress]
+      [recentDestinations]
+      [authToken]
+      [userProfile]
+      [offlineRequests]
+    }
+  }
 
-[VoiceBookingScreen] --> [VoiceService]
-[RideStatusScreen] --> [VoiceService]
+  package "缓存 (Cache)" {
+    database "Memory Cache" as MC {
+      [driverLocation]
+      [rideStatus]
+      [voiceSession]
+    }
+  }
+}
 
-[VoiceBookingScreen] --> [RideService]
-[QRBookingScreen] --> [RideService]
-[HotlineBookingScreen] --> [RideService]
-[RideStatusScreen] --> [RideService]
+' ===== 外部服务层 (External Services) =====
+package "外部服务 (External)" #ECEFF1 {
+  cloud "Ride Backend" {
+    [Ride API] as RAPI
+    [Dispatch Engine] as DE
+    [Payment Gateway] as PGW
+  }
 
-[RideStatusScreen] --> [SafetyService]
+  cloud "Voice Services" {
+    [STT Engine] as STT
+    [TTS Engine] as TTS
+  }
 
-[FamilyPayScreen] --> [PaymentService]
+  cloud "Communication" {
+    [SMS Gateway] as SMSGW
+    [Push Notification\n(FCM/APNs)] as PUSH
+  }
 
-[HomeScreen] --> [ElderlyThemeProvider]
-[SettingsScreen] --> [ElderlyThemeProvider]
+  cloud "Infrastructure" {
+    [Emergency Service\n(110/120)] as EMS
+    [Hotline 95128] as H95128
+    [QR Station\n(暖心车站)] as QRS_EXT
+  }
 
-[VoiceService] --> [Speech-to-Text API]
-[VoiceService] --> [TTS API]
+  cloud "Storage" {
+    database "PostgreSQL" as PG
+    database "Redis" as REDIS
+    database "S3/OSS" as S3
+  }
+}
 
-[RideService] --> [Ride Backend API]
+' ===== 展示层内部依赖 =====
+HS --> OTC : contains
+HS --> EB : contains
+HS --> EBN : contains
+HS --> LT : contains
 
-[PaymentService] --> [Payment Gateway]
-[PaymentService] --> [SMS Service]
+VBS --> EVI : contains
+VBS --> EM : contains
+VBS --> EB : contains
+VBS --> LT : contains
 
-[SafetyService] --> [Ride Backend API]
-[SafetyService] --> [Emergency Service API]
-[SafetyService] --> [SMS Service]
+QBS --> QRS : contains
+QBS --> ETI : contains
+QBS --> EM : contains
 
-[ElderlyThemeProvider] --> [AsyncStorage]
+RSS --> LLC : contains
+RSS --> SB : contains
+RSS --> EM : contains
+RSS --> LT : contains
 
-note right of [ElderlyThemeProvider]
-  管理字体缩放、
-  高对比度、
-  减少动画等设置
+SGS --> LLC : contains
+SGS --> SB : contains
+SGS --> EB : contains
+
+SOS --> SB : contains
+SOS --> EM : contains
+SOS --> LT : contains
+
+FPS --> EM : contains
+FPS --> EB : contains
+FPS --> LT : contains
+
+SS --> FSS : contains
+SS --> CT : contains
+SS --> AAC : contains
+SS --> EB : contains
+
+THS --> SSH : uses
+PS --> ETI : contains
+PS --> AAC : contains
+
+OF --> FSS : uses
+OF --> AAC : uses
+OF --> EVI : uses
+
+' ===== 屏幕-服务依赖 =====
+VBS --> VS : uses
+VBS --> RS : uses
+VBS --> VC : uses
+
+HS --> RS : uses
+HS --> US : uses
+HS --> NS : uses
+
+QBS --> StS : uses
+QBS --> RS : uses
+
+HBS --> RS : uses
+HBS --> NS : uses
+
+RSS --> RS : uses
+RSS --> SafS : uses
+RSS --> LS : uses
+RSS --> VS : uses
+RSS --> RC : uses
+
+SGS --> SafS : uses
+SGS --> LS : uses
+
+SOS --> SafS : uses
+SOS --> NS : uses
+
+FPS --> PayS : uses
+FPS --> NS : uses
+
+SS --> ETP : uses
+SS --> US : uses
+
+THS --> RS : uses
+PS --> US : uses
+
+' ===== 服务-网络层依赖 =====
+VS --> APC : uses
+RS --> APC : uses
+PayS --> APC : uses
+SafS --> APC : uses
+StS --> APC : uses
+US --> APC : uses
+NS --> APC : uses
+LS --> APC : uses
+POIS --> APC : uses
+
+APC --> HTTP : uses
+APC --> WS : uses
+APC --> RH : uses
+APC --> OQ : uses
+APC --> AI : uses
+
+' ===== 状态管理依赖 =====
+HS --> ETP : uses
+VBS --> ETP : uses
+RSS --> ETP : uses
+SS --> ETP : uses
+SGS --> ETP : uses
+
+HS --> AC : uses
+VBS --> VC : uses
+RSS --> RC : uses
+
+ETP --> AS : stores
+AC --> AS : stores
+RC --> MC : stores
+
+' ===== 外部服务依赖 =====
+APC --> RAPI : HTTPS/REST
+APC --> PGW : HTTPS
+APC --> STT : WebSocket
+APC --> TTS : HTTPS
+APC --> SMSGW : HTTPS
+APC --> PUSH : HTTPS
+APC --> EMS : HTTPS
+APC --> H95128 : Tel/SIP
+APC --> PG : via Backend
+APC --> REDIS : via Backend
+APC --> S3 : via Backend
+
+RSS --> QRS_EXT : Camera Scan
+HBS --> H95128 : Tel Call
+
+' ===== 数据流标注 =====
+note right of APC
+  <b>网络韧性策略:</b>
+  - 指数退避重试 (1s→2s→4s→8s)
+  - 离线请求队列 (OQ)
+  - 4xx不重试, 5xx重试3次
+  - Stale-While-Revalidate缓存
+  - 网络恢复自动flush队列
 end note
 
-note bottom of [VoiceService]
-  单例服务
-  支持语音输入和
-  语音播报反馈
+note right of ETP
+  <b>主题管理:</b>
+  - 字体缩放 1.0-2.0x
+  - 高对比度模式 (7:1)
+  - 减少动画
+  - 持久化AsyncStorage
+  - 7个主题属性
 end note
 
-note bottom of [SafetyService]
-  新增安全服务模块
-  行程守护 / 车牌校验
-  SOS紧急求助
-  实时位置共享
+note bottom of SafS
+  <b>安全服务:</b>
+  - SOS调度(离线兜底)
+  - 车牌校验
+  - 实时位置共享
+  - 亲友通知
+  - 行程录音
+  - 异常检测(偏离/停留)
 end note
 
-note right of [RideService]
-  就医优先派单
-  无接单自动扩范围
+note bottom of VS
+  <b>语音服务(单例):</b>
+  - STT: 语音识别(zh-CN)
+  - TTS: 文字播报
+  - 意图解析 (parseVoiceIntent)
+  - 置信度返回
+  - 最大重试3次, 超时5s
 end note
+
+note bottom of PayS
+  <b>支付服务:</b>
+  - 线上支付 (微信/支付宝)
+  - 现金支付 (司机确认)
+  - 亲友代付 (SMS链接)
+  - 支付轮询 (3次/5s间隔)
+  - 超时自动转线上
+end note
+
+note bottom of RS
+  <b>行程服务:</b>
+  - 订单CRUD
+  - 就医优先派单
+  - 无接单自动扩范围
+  - 状态订阅 (WebSocket)
+  - 历史行程查询
+end note
+
+note right of AS
+  <b>AsyncStorage键:</b>
+  - @elderly:fontScale
+  - @elderly:highContrast
+  - @elderly:homeAddress
+  - @elderly:recentDests
+  - @elderly:authToken
+  - @elderly:userProfile
+  - @elderly:offlineQueue
+  - @elderly:onboardingComplete
+end note
+
 @enduml

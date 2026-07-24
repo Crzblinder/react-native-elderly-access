@@ -1,0 +1,46 @@
+@startuml
+title 适老化打车平台 - 数据流图 (Data Flow Diagram - Level 0 & 1)
+
+skinparam rectangle {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontSize 14
+}
+
+skinparam node {
+  BackgroundColor #FFF3E0
+  BorderColor #EF6C00
+  FontSize 13
+}
+
+' ===== Level 0: Context Diagram =====
+rectangle "== Level 0: 上下文数据流图 ==" as L0_HEADER #E8EAF6
+
+actor "老年用户" as ElderlyUser
+actor "亲友用户" as FamilyUser
+actor "司机" as DriverUser
+actor "平台客服" as PlatformOps
+
+rectangle "适老化打车平台\n(Elderly Taxi Platform)" as System #E3F2FD
+
+actor "110/120\n紧急服务" as EmergencySvc
+actor "95128\n热线" as Hotline
+actor "支付网关\n(微信/支付宝)" as PaymentGW
+actor "SMS网关" as SMSGW
+
+ElderlyUser --> System : 叫车请求/语音输入/支付选择/SOS触发
+FamilyUser --> System : 查看位置/代付/接收通知
+DriverUser --> System : 接单/位置上报/确认收款
+PlatformOps --> System : 查看SOS告警/处理工单
+
+System --> ElderlyUser : 订单状态/司机信息/支付结果/TTS播报
+System --> FamilyUser : 行程通知/位置链接/代付请求/SOS告警
+System --> DriverUser : 订单推送/导航信息
+System --> PlatformOps : SOS告警/异常订单
+
+System --> EmergencySvc : SOS调度(110/120)
+System --> Hotline : 95128热线叫车
+System --> PaymentGW : 支付请求
+System --> SMSGW : 短信通知
+
+@enduml

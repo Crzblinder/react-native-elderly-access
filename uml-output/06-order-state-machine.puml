@@ -1,0 +1,90 @@
+@startuml
+title 适老化打车平台 - 订单生命周期状态机 (Order State Machine)
+
+skinparam state {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontSize 16
+  FontName Arial
+}
+
+skinparam note {
+  BackgroundColor #FFF9C4
+  BorderColor #F9A825
+}
+
+state "IDLE\n(空闲)" as IDLE #E8F5E9
+state "MATCHING\n(匹配中)" as MATCHING #FFF3E0
+state "MATCHING_EXPANDED\n(扩大范围匹配)" as MATCHING_EXPANDED #FFE0B2
+state "ASSIGNED\n(司机已接单)" as ASSIGNED #BBDEFB
+state "ARRIVING\n(司机赶来中)" as ARRIVING #BBDEFB
+state "ARRIVED\n(已到达上车点)" as ARRIVED #C8E6C9
+state "PLATE_VERIFYING\n(车牌核验中)" as PLATE_VERIFYING #C8E6C9
+state "IN_TRIP\n(行程中)" as IN_TRIP #90CAF9
+state "SOS_ACTIVE\n(紧急求助中)" as SOS_ACTIVE #FFCDD2
+state "COMPLETED\n(行程结束)" as COMPLETED #E8F5E9
+state "PAYING\n(支付中)" as PAYING #F3E5F5
+state "PAID\n(已支付)" as PAID #E8F5E9
+state "CANCELLED\n(已取消)" as CANCELLED #ECEFF1
+state "REFUNDING\n(退款中)" as REFUNDING #F3E5F5
+
+[*] --> IDLE
+
+IDLE --> MATCHING : 用户确认叫车\n(createOrder)
+IDLE --> CANCELLED : 用户取消
+
+MATCHING --> MATCHING_EXPANDED : 3分钟无司机接单\n(expandMatchRange)
+MATCHING_EXPANDED --> ASSIGNED : 司机接单
+MATCHING --> ASSIGNED : 司机接单
+MATCHING --> CANCELLED : 用户取消 / 超时无司机
+MATCHING_EXPANDED --> CANCELLED : 用户取消 / 扩大范围后仍无司机
+
+ASSIGNED --> ARRIVING : 司机出发
+ARRIVING --> ARRIVED : 司机到达上车点
+
+ARRIVED --> PLATE_VERIFYING : 用户确认车牌号
+PLATE_VERIFYING --> IN_TRIP : 车牌匹配 ✓\n(开始行程)
+PLATE_VERIFYING --> ARRIVED : 车牌不匹配\n(重新核验/换车)
+PLATE_VERIFYING --> CANCELLED : 车牌不匹配\n(用户拒绝上车)
+
+IN_TRIP --> SOS_ACTIVE : 长按SOS按钮\n(triggerSOS)
+SOS_ACTIVE --> IN_TRIP : SOS解除\n(误触取消)
+SOS_ACTIVE --> COMPLETED : 紧急处置完成\n(到达安全地点)
+
+IN_TRIP --> COMPLETED : 司机结束行程\n(到达目的地)
+
+COMPLETED --> PAYING : 选择支付方式
+PAYING --> PAID : 支付成功\n(线上/现金/代付)
+PAYING --> REFUNDING : 支付异常\n(重复扣款等)
+REFUNDING --> PAID : 退款完成
+PAYING --> CANCELLED : 超时未支付\n(24小时)
+
+PAID --> [*]
+CANCELLED --> [*]
+
+note top of MATCHING_EXPANDED
+  竞品启发(P6): 等太久没人接
+  3分钟无单→自动扩大半径→TTS播报
+  扩大范围: 2km→3km→5km
+end note
+
+note right of PLATE_VERIFYING
+  竞品启发(P1): 怕上错车
+  52%老人担心上错车
+  车牌不匹配→大字警告→通知亲友
+end note
+
+note right of SOS_ACTIVE
+  竞品启发(P2): 行程安全焦虑
+  71岁老人独乘出租车去世案例
+  SOS触发→110/120+位置共享+录音
+end note
+
+note bottom of PAYING
+  三种支付方式:
+  - 线上支付 (selfPay)
+  - 现金支付 (cashPay, ~20%用户)
+  - 亲友代付 (familyPay)
+end note
+
+@enduml

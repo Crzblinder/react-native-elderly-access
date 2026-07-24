@@ -1,0 +1,131 @@
+@startuml
+title 适老化打车平台 - SOS紧急求助完整链路时序图 (SOS Emergency Sequence)
+
+actor "老年用户" as User
+participant "APP前端\n(React Native)" as App
+participant "安全服务\n(SafetyService)" as Safety
+participant "后端API\n(Backend API)" as API
+participant "紧急服务\n(110/120)" as Emergency
+participant "亲友端" as Family
+participant "平台客服" as Platform
+
+== 1. SOS触发（防误触） ==
+User -> App: 按下SOS按钮
+activate App
+App -> App: 检测按压\n(非单击，需长按)
+App -> App: 开始3秒倒计时\n+每秒振动反馈
+App -> App: 大字显示倒计时\n"3...2...1..."
+
+alt 用户松开(未到3秒)
+  App -> App: 取消SOS
+  App --> User: "已取消求助"
+  deactivate App
+  stop
+else 倒计时结束(3秒到)
+  App -> App: SOS确认触发
+end
+
+== 2. SOS调度 ==
+App -> Safety: triggerSOS(orderId, location, callAmbulance)
+activate Safety
+Safety -> Safety: 检查网络状态
+
+alt 网络不可用(离线SOS)
+  Safety -> Safety: 离线缓存SOS请求\n(AsyncStorage)
+  Safety -> Safety: 预载紧急短信\n(直接发送给亲友)
+  Safety -> Family: 尝试发送紧急短信\n(短信可能独立于数据网络)
+  Safety --> App: {dispatched: false, queued: true}
+  App --> User: "求助已缓存，网络恢复后自动发送"
+  deactivate Safety
+  deactivate App
+  stop
+else 网络正常
+  Safety -> API: POST /api/v1/safety/sos\n{orderId, location, callAmbulance}
+  activate API
+end
+
+== 3. 紧急服务调度 ==
+API -> API: 创建SOS事件记录\n(sos_events表)
+API -> API: 获取行程信息\n(司机/车牌/路线)
+
+alt 需要急救车
+  API -> Emergency: 拨打120急救
+  activate Emergency
+  Emergency --> API: 120已受理
+  deactivate Emergency
+else 标准求助
+  API -> Emergency: 拨打110报警
+  activate Emergency
+  Emergency --> API: 110已受理
+  deactivate Emergency
+end
+
+== 4. 亲友通知 ==
+API -> API: 查询紧急联系人列表
+API -> Family: 推送SOS紧急通知\n"您的家人正在求助！"
+activate Family
+API -> Family: 发送实时位置链接\n+行程信息(司机/车牌)
+Family --> API: 确认收到通知
+deactivate Family
+
+== 5. 平台介入 ==
+API -> Platform: 推送SOS告警\n"订单{orderId}触发SOS"
+activate Platform
+Platform --> API: 客服已介入
+deactivate Platform
+
+== 6. 行程录音启动 ==
+API -> Safety: 启动行程录音
+Safety -> Safety: 开始录音\n(每30秒上传片段)
+Safety -> Safety: 录音存储至S3\n(加密存储)
+
+== 7. 响应确认 ==
+API --> Safety: 返回SOS响应
+deactivate API
+Safety --> App: {sosId, dispatched, services, familyNotified, recordingStarted}
+deactivate Safety
+
+App -> App: 大字确认页\n"已为您呼叫帮助"
+App -> App: TTS播报"已为您呼叫110/120，并通知家人"
+App --> User: "已为您呼叫帮助\n110/120已出发\n家人已通知\n录音已开启"
+deactivate App
+
+== 8. 后续处理 ==
+loop 每30秒
+  Safety -> API: 上传录音片段
+end
+
+loop 每10秒
+  App -> API: 上报实时位置
+  API -> Family: 更新位置共享
+end
+
+== 9. SOS解除 ==
+alt 用户确认安全
+  User -> App: 点击"确认安全"
+  activate App
+  App -> API: POST /api/v1/safety/sos/{sosId}/cancel\n{resolution: "safe"}
+  activate API
+  API -> API: 更新SOS状态为已解除
+  API -> API: 停止录音
+  API -> Family: 推送"已确认安全"
+  API -> Platform: 推送"SOS已解除"
+  API --> App: SOS已解除
+  deactivate API
+  App --> User: "SOS已解除，祝您安全"
+  deactivate App
+else 误触发(3分钟内确认)
+  User -> App: 点击"误触发"
+  activate App
+  App -> API: POST /api/v1/safety/sos/{sosId}/cancel\n{isFalseAlarm: true}
+  activate API
+  API -> API: 标记为误触发\n(记录日志)
+  API -> API: 停止录音
+  API -> Family: 推送"误触发已取消"
+  API --> App: 已取消
+  deactivate API
+  App --> User: "已取消，如有需要请再次长按SOS"
+  deactivate App
+end
+
+@enduml

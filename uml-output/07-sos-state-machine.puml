@@ -1,0 +1,90 @@
+@startuml
+title 适老化打车平台 - SOS紧急求助状态机 (SOS State Machine)
+
+skinparam state {
+  BackgroundColor #FFCDD2
+  BorderColor #D32F2F
+  FontSize 16
+  FontName Arial
+}
+
+skinparam note {
+  BackgroundColor #FFF9C4
+  BorderColor #F9A825
+}
+
+state "IDLE\n(待命)" as IDLE #E8F5E9
+state "PRESS_DETECTED\n(检测到按压)" as PRESS_DETECTED #FFF3E0
+state "COUNTDOWN\n(倒计时中)" as COUNTDOWN #FFE0B2
+state "COUNTDOWN_CANCELLED\n(倒计时取消)" as CANCELLED #ECEFF1
+state "DISPATCHING\n(调度中)" as DISPATCHING #FFCDD2
+state "DISPATCHED\n(已调度)" as DISPATCHED #FFCDD2
+state "RECORDING\n(录音中)" as RECORDING #FFCDD2
+state "RESOLVED\n(已解除)" as RESOLVED #E8F5E9
+state "FALSE_ALARM\n(误触发)" as FALSE_ALARM #ECEFF1
+
+[*] --> IDLE
+
+IDLE --> PRESS_DETECTED : 用户按下SOS按钮\n(onPressIn)
+PRESS_DETECTED --> COUNTDOWN : 开始倒计时\n(3秒)
+PRESS_DETECTED --> IDLE : 用户松开\n(不足触发时间)
+
+COUNTDOWN --> COUNTDOWN : 倒计时中\n(每秒振动提醒)
+COUNTDOWN --> COUNTDOWN_CANCELLED : 用户松开取消\n(onPressOut)
+COUNTDOWN_CANCELLED --> IDLE : 重置状态
+
+COUNTDOWN --> DISPATCHING : 倒计时结束\n(3秒到)
+
+state DISPATCHING {
+  [*] --> DIAL_EMERGENCY
+  DIAL_EMERGENCY : 拨打110/120
+  DIAL_EMERGENCY --> BROADCAST_LOCATION
+  BROADCAST_LOCATION : 向亲友+平台\n广播实时位置
+  BROADCAST_LOCATION --> START_RECORDING
+  START_RECORDING : 启动行程录音
+  START_RECORDING --> NOTIFY_FAMILY
+  NOTIFY_FAMILY : 推送SOS通知给亲友
+  NOTIFY_FAMILY --> [*]
+}
+
+DISPATCHING --> DISPATCHED : 调度完成
+DISPATCHING --> DISPATCHED : 部分服务失败\n(降级: 仍通知亲友)
+
+DISPATCHED --> RECORDING : 录音持续中
+RECORDING --> RECORDING : 每30秒上传录音片段
+
+DISPATCHED --> RESOLVED : 确认安全\n(用户/亲友/平台确认)
+RECORDING --> RESOLVED : 确认安全\n(停止录音)
+
+DISPATCHED --> FALSE_ALARM : 用户确认误触发\n(3分钟内)
+FALSE_ALARM --> IDLE : 重置(记录日志)
+
+RESOLVED --> [*]
+
+note right of COUNTDOWN
+  F8.1: 长按3秒触发
+  防误触设计:
+  - 非单击, 需长按
+  - 每秒振动反馈
+  - 松开即取消
+  - 大字实时倒计时
+end note
+
+note right of DISPATCHING
+  F8.2-F8.5:
+  1. 拨打110/120
+  2. 广播位置给亲友
+  3. 启动行程录音
+  4. 大字确认弹窗
+  5. 平台客服介入
+end note
+
+note bottom of FALSE_ALARM
+  误触发处理:
+  - 3分钟内可取消
+  - 记录误触发日志
+  - 优化按钮位置/灵敏度
+  - 不通知110/120(已拨需告知)
+end note
+
+@enduml

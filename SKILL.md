@@ -457,3 +457,97 @@ const styles = StyleSheet.create({
 - UML and system architecture: see [assets/architecture-diagram.md](assets/architecture-diagram.md)
 - Accessibility audit tool: `node scripts/check-a11y.js <project-path>`
 - Component generator: `node scripts/gen-component.js <ComponentName>`
+
+## Troubleshooting Guide
+
+### Common Build & Runtime Errors
+
+| Symptom | Likely Cause | Solution |
+|---------|-------------|----------|
+| `Voice is not defined` | `react-native-voice` not linked | Run `npx react-native link react-native-voice`; check native module autolinking |
+| Font scale not applying | `ElderlyThemeProvider` not wrapping screens | Ensure `<ElderlyThemeProvider>` wraps the entire app or navigation container |
+| Touch targets pass but feel small on device | `hitSlop` incorrectly set | Use `hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}` on all interactive elements |
+| Text truncated at 2.0x scale | Fixed height container | Replace fixed heights with `minHeight`; wrap content in `ScrollView` |
+| Voice recognition returns empty | Permission denied or silent input | Check microphone permission in Settings; show "没有听清，请再说一次" after 3 empty results |
+| TTS not speaking on Android | TTS engine not installed | Prompt user to install Google TTS from Play Store; fallback to visual-only feedback |
+| Payment link not opening | Deep link not configured | Verify `AndroidManifest.xml` intent filters and `Info.plist` URL schemes |
+| SOS button not triggering | Registration missing in native module | Verify `SOSButton` native module is linked; check `onSOS` callback binding |
+| QR scanner black screen | Camera permission denied | Request `CAMERA` permission at runtime; show fallback: "扫不了？拨打 95128" |
+| Cash payment stuck "pending" | Driver-side confirmation missing | After 30 minutes, auto-switch to online payment; notify user via push |
+
+### Performance Issues
+
+| Symptom | Diagnosis | Fix |
+|---------|-----------|-----|
+| Home screen slow to load | Too many AsyncStorage reads on mount | Batch reads with `multiGet`; use `React.memo` on card components |
+| Voice recognition slow (> 5s) | Network latency to STT API | Set 5s timeout; show "正在识别..." with loading animation; fallback to manual input |
+| Driver location map laggy | GPS polling too frequent | Throttle to 5s intervals; use `react-native-maps` with `shouldRasterizeIOS` |
+| Memory growing during long trips | Location or recording state not cleaned up | Clear intervals on `useEffect` cleanup; stop recording on trip end |
+| Re-renders on every font scale change | All components subscribe to `useElderlyTheme` | Memoize theme values; use `React.memo` + `useMemo` for expensive calculations |
+| App crash on low-end devices | Too many simultaneous animations | Disable non-essential animations with `reducedMotion`; use `LayoutAnimation` sparingly |
+
+### Accessibility Audit Failures
+
+| Audit Failure | Why It Matters | Fix |
+|---------------|---------------|-----|
+| `accessibilityLabel` missing | Screen reader users can't navigate | Add descriptive labels: "一键打车回家，幸福小区 3 号楼" |
+| Contrast < 4.5:1 | Low-vision users can't read | Use the color palette from `accessibility-guide.md` §3; run `check-a11y.js` |
+| Touch target < 48dp | Users with tremors can't tap accurately | Increase to 56dp minimum; add `hitSlop` padding |
+| Nested scrolling detected | Screen reader gets trapped | Remove nested `ScrollView`; use flat lists with `getItemLayout` |
+| No back button visible | Elderly users can't escape error states | Always render a "返回" button at the bottom of every screen |
+
+### Common Error Patterns & Recovery
+
+**Network unavailable**:
+```typescript
+// Pattern: always check network before critical operations
+import NetInfo from '@react-native-community/netinfo';
+
+const netState = await NetInfo.fetch();
+if (!netState.isConnected) {
+  // Show offline UI with cached data
+  // Queue writes for later sync
+  // Offer fallback: "拨打 95128 热线叫车"
+}
+```
+
+**Voice permission denied**:
+```typescript
+// Pattern: graceful degradation to manual input
+try {
+  await Voice.start('zh-CN');
+} catch (e) {
+  if (e.code === 'PERMISSION_DENIED') {
+    // Show manual input UI
+    // Guide user to Settings > Privacy > Microphone
+    setShowManualInput(true);
+  }
+}
+```
+
+**SOS offline fallback**:
+```typescript
+// Pattern: SOS must never fail silently
+// 1. Try API call
+// 2. If offline, queue locally + send emergency SMS directly
+// 3. On app restart, flush pending SOS queue
+// 4. Always show visual confirmation "已为您呼叫帮助"
+```
+
+**Payment timeout recovery**:
+```typescript
+// Pattern: poll with timeout, then offer manual check
+// 1. Poll payment status every 3s for 30s
+// 2. If still pending, show "正在查询支付结果..."
+// 3. Offer manual "查询支付结果" button
+// 4. Never block the user from taking other actions
+```
+
+**Low-confidence voice recognition**:
+```typescript
+// Pattern: show candidate list, don't error
+// 1. If confidence < 0.7, show top 3 candidates as large card buttons
+// 2. Always include "都不是，重新说" option
+// 3. Always include "手动输入" fallback
+// 4. Save user's alias for future recognition (e.g., "我儿子家" → saved address)
+```

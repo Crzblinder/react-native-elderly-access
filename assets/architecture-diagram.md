@@ -229,12 +229,25 @@
     └── assets/architecture-diagram.md (This File)
 
   uml-output/
-    ├── 01-use-case.puml
-    ├── 02-business-flow.puml
-    ├── 02-business-flow-enhanced.puml
-    ├── 03-sequence-voice-booking.puml
-    ├── 04-class-diagram.puml
-    └── 05-component-architecture.puml
+    ├── 01-use-case.puml                  (用例图: 15 use cases, 3 actors)
+    ├── 02-business-flow.puml             (原始业务流程图)
+    ├── 02-business-flow-enhanced.puml    (扩充业务流程图: 安全守护/SOS/现金/就医)
+    ├── 03-sequence-voice-booking.puml    (语音叫车时序图: 7阶段)
+    ├── 04-class-diagram.puml             (核心类图: 9 services, 11 screens, 14 components, 9 entities)
+    ├── 05-component-architecture.puml    (深度组件架构: 3层, 35+组件)
+    ├── 06-order-state-machine.puml       (订单生命周期状态机: 14 states, 18 transitions)
+    ├── 07-sos-state-machine.puml         (SOS紧急状态机)
+    ├── 08-deployment-architecture.puml   (部署架构: K8s, PostgreSQL, Redis, S3)
+    ├── 09-sequence-qr-booking.puml       (扫码叫车时序图)
+    ├── 10-sequence-sos-emergency.puml    (SOS紧急求助时序图)
+    ├── 11-sequence-payment-flow.puml     (多支付方式时序图)
+    ├── 12-er-diagram.puml                (ER实体关系图: 7 tables)
+    ├── 13-data-flow-diagram.puml         (数据流图: Level 0 & 1)
+    ├── 14-sequence-one-tap-booking.puml  (一键叫车时序图: 含登录/地址/车牌校验)
+    ├── 15-sequence-hotline-booking.puml  (95128热线叫车时序图: IVR/客服/短信)
+    ├── 16-sequence-medical-priority.puml (就医优先派单时序图: POI/权重/统计)
+    ├── 17-sequence-family-tracking.puml  (亲友追踪与代付时序图: 异常检测/SOS)
+    └── 18-activity-onboarding.puml       (引导与设置流程: 3步引导)
 
   scripts/
     ├── check-a11y.js (Accessibility Audit)

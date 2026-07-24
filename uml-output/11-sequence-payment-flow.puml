@@ -1,0 +1,152 @@
+@startuml
+title 适老化打车平台 - 多支付方式完整链路时序图 (Payment Flow Sequence)
+
+actor "老年用户" as User
+participant "APP前端\n(React Native)" as App
+participant "支付服务\n(PaymentService)" as PaySvc
+participant "后端API\n(Backend API)" as API
+participant "支付网关\n(WeChat/Alipay)" as PGW
+participant "SMS网关" as SMS
+participant "司机端" as Driver
+participant "亲友端" as Family
+
+== 1. 行程结束，展示账单 ==
+Driver -> API: 结束行程
+activate API
+API -> API: 计算费用\n(里程+时长+动态调价)
+API -> API: 生成账单记录\n(payments表)
+API --> App: 推送账单信息\n{orderId, amount, tripSummary}
+deactivate API
+
+activate App
+App -> App: 大字展示账单\n"起点: 幸福小区\n终点: 人民医院\n费用: ¥25.00"
+App --> User: 选择支付方式\n[自己支付] [现金支付] [亲友代付]
+deactivate App
+
+== 2A. 线上支付（自己支付） ==
+User -> App: 点击"自己支付"
+activate App
+App -> PaySvc: selfPay(orderId)
+activate PaySvc
+PaySvc -> API: POST /api/v1/payments/{orderId}/pay\n{method: "online"}
+activate API
+API -> PGW: 发起支付请求
+activate PGW
+PGW -> PGW: 处理支付
+PGW --> API: 支付成功
+deactivate PGW
+API -> API: 更新支付状态为"paid"
+API --> PaySvc: 支付成功\n{receipt}
+deactivate API
+
+PaySvc --> App: 返回支付凭证
+deactivate PaySvc
+App -> App: 大字展示支付结果\n"支付成功 ✓\n¥25.00"
+App -> App: TTS播报"支付成功"
+App --> User: 支付完成
+deactivate App
+stop
+
+== 2B. 现金支付 ==
+User -> App: 点击"现金支付"
+activate App
+App -> PaySvc: cashPay(orderId)
+activate PaySvc
+PaySvc -> API: POST /api/v1/payments/{orderId}/pay\n{method: "cash"}
+activate API
+API -> API: 创建现金支付记录\n(status: "pending")
+API --> PaySvc: 等待司机确认
+deactivate API
+PaySvc --> App: {status: "pending"}
+deactivate PaySvc
+
+App -> App: 大字提示\n"请向司机支付现金 ¥25.00"
+App --> User: "请向司机支付现金"
+
+User -> Driver: 支付现金
+Driver -> API: 确认收到现金
+activate API
+API -> API: 更新支付状态为"paid"
+API --> App: 现金支付完成
+deactivate API
+
+App -> App: 大字展示支付结果\n"现金支付完成 ✓"
+App -> App: TTS播报"支付完成"
+App --> User: 支付完成
+deactivate App
+
+== 2C. 亲友代付 ==
+User -> App: 点击"亲友代付"
+activate App
+App -> PaySvc: familyPay(orderId, {name, phone})
+activate PaySvc
+PaySvc -> API: POST /api/v1/payments/{orderId}/pay\n{method: "family", familyContact: {name, phone}}
+activate API
+API -> API: 生成支付链接\n(24小时有效期)
+API -> SMS: 发送支付短信
+activate SMS
+SMS -> Family: 【打车代付】\n幸福小区→人民医院\n费用 ¥25.00\n点击链接支付
+deactivate SMS
+
+API --> PaySvc: 支付链接已发送
+deactivate API
+PaySvc --> App: {status: "pending", payLinkSent: true}
+deactivate PaySvc
+
+App -> App: 大字提示\n"已发送代付请求给小王"
+App --> User: "等待家人支付..."
+
+== 3. 亲友端支付 ==
+Family -> Family: 打开支付链接
+activate Family
+Family -> Family: 查看行程详情\n(起终点+金额+时长+司机)
+Family -> Family: 点击"确认代付"
+Family -> API: 确认支付
+activate API
+API -> PGW: 处理支付
+activate PGW
+PGW --> API: 支付成功
+deactivate PGW
+API -> API: 更新支付状态为"paid"
+API --> Family: 支付成功
+deactivate Family
+API --> App: 推送"支付已完成"
+deactivate API
+
+App -> App: 大字展示支付结果\n"小王已帮您支付 ¥25.00 ✓"
+App -> App: TTS播报"家人已帮您支付"
+App --> User: 支付完成
+deactivate App
+stop
+
+== 4. 支付异常处理 ==
+note over PaySvc, API: 支付超时/网络异常处理
+
+alt 支付链接过期(24小时)
+  API -> App: 推送"支付链接已过期"
+  App --> User: "支付链接已过期，请重新发送"
+  User -> App: 点击"重新发送"
+  App -> PaySvc: sendPayLink(orderId, phone)
+  PaySvc -> API: POST /api/v1/payments/{orderId}/resend-link
+  API -> SMS: 重新发送支付链接
+end
+
+alt 线上支付超时
+  PaySvc -> PaySvc: 轮询支付结果\n(每3秒, 最多30秒)
+  loop 轮询(最多10次)
+    PaySvc -> API: GET /api/v1/payments/{orderId}/status
+    API --> PaySvc: {status: "pending" | "paid" | "expired"}
+  end
+  alt 30秒仍未确认
+    App --> User: "支付结果确认中\n可手动查询"
+    App -> App: 显示"查询支付结果"按钮
+  end
+end
+
+alt 现金支付超时未确认(30分钟)
+  API -> App: 推送"现金支付未确认"
+  API -> API: 自动转为线上支付
+  App --> User: "现金支付未确认\n已转为线上支付"
+end
+
+@enduml

@@ -1,0 +1,125 @@
+@startuml
+title 适老化打车平台 - 扫码叫车完整链路时序图 (QR Booking Sequence)
+
+actor "老年用户" as User
+participant "暖心车站\n(QR Code)" as Station
+participant "APP前端\n(React Native)" as App
+participant "后端API\n(Backend API)" as API
+participant "司机端" as Driver
+participant "亲友端" as Family
+
+== 1. 扫码识别 ==
+User -> Station: 打开APP扫码
+activate User
+Station -> App: 扫描二维码\n{stationId: "STN_001"}
+activate App
+App -> API: POST /api/v1/stations/resolve\n{stationId: "STN_001"}
+activate API
+API -> API: 查询站点信息\n(名称/地址/GPS坐标)
+API --> App: 返回站点信息\n{stationName, address, lat, lng}
+deactivate API
+
+App -> App: 大字展示上车点
+App --> User: "幸福社区助老打车点\n幸福路88号路口"
+deactivate App
+
+== 2. 输入目的地 ==
+User -> App: 说出或输入目的地
+activate App
+App -> App: 语音识别/手动输入
+note right: 不填时默认\n"最近医院"或家庭地址
+
+App -> API: POST /api/v1/rides\n{stationId, destination, entryType: "qr_station"}
+activate API
+API -> API: 创建订单\n(上车点为站点GPS)
+API --> App: 返回订单信息\n{orderId, estimatedFare, estimatedETA}
+deactivate API
+
+App -> App: 大字弹窗确认\n"上车点: 幸福社区\n目的地: 人民医院"
+App --> User: 显示确认弹窗
+deactivate App
+
+== 3. 确认叫车 ==
+User -> App: 点击"确认叫车"
+activate App
+App -> API: 确认订单
+activate API
+
+alt 目的地为医院
+  API -> API: 就医优先派单\n(提升附近司机权重)
+end
+
+API -> Driver: 推送订单通知
+activate Driver
+Driver --> API: 司机接单
+deactivate Driver
+
+alt 3分钟无司机接单
+  API -> API: 自动扩大匹配半径\n(2km→3km→5km)
+  API --> App: 推送"正在扩大范围找车"
+  App -> App: TTS播报
+end
+
+API --> App: 返回司机信息\n{name, plateNumber, carModel, eta}
+deactivate API
+App -> App: TTS播报"已为您匹配司机"
+App --> User: 显示司机信息\n(大字车牌号)
+deactivate App
+
+== 4. 安全守护 ==
+Driver -> API: 更新位置/状态
+API -> API: 司机出发
+API -> Family: 推送行程开始通知\n+实时位置链接
+activate Family
+Family --> API: 查看实时轨迹
+Family --> API: 一键拨打司机电话
+deactivate Family
+
+Driver -> User: 到达上车点
+User -> App: 核对车牌号
+alt 车牌号匹配
+  App --> User: "车牌号匹配，请上车"
+else 车牌号不匹配
+  App --> User: 大字弹窗警告\n"车牌号不符，请勿上车"
+  App -> API: 通知亲友+平台
+  API -> Family: 车牌不匹配告警
+end
+
+== 5. 行程中 ==
+User -> Driver: 上车
+Driver -> API: 开始行程
+API -> App: 更新状态为"行程中"
+App -> App: TTS播报"行程开始"
+
+== 6. 行程结束与支付 ==
+Driver -> API: 结束行程
+API --> App: 推送账单
+App --> User: 显示支付界面\n(大字账单)
+
+User -> App: 选择支付方式
+alt 自己线上支付
+  App -> API: 发起支付
+  API --> App: 支付成功
+else 现金支付
+  App --> User: "请向司机支付现金"
+  Driver -> API: 确认收到现金
+  API --> App: 现金支付完成
+else 亲友代付
+  App -> API: 生成支付链接
+  API -> Family: 发送SMS支付链接
+  Family -> API: 确认代付
+  API --> App: 支付完成
+end
+
+App --> User: 大字支付结果确认
+
+== 7. 行后关怀 ==
+alt 终点为医院
+  API -> Family: 推送"已到达医院"通知
+  App -> App: TTS播报"已到达，祝您一切顺利"
+end
+
+API -> API: 生成行程记录
+deactivate User
+
+@enduml

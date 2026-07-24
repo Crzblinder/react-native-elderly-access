@@ -1,125 +1,248 @@
 @startuml
-title 适老化打车平台 - 核心类图 (Class Diagram)
+title 适老化打车平台 - 核心类图（深化版）(Enhanced Class Diagram)
 
 skinparam classAttributeIconSize 0
+skinparam classFontSize 14
 
+' ===== Theme & Context =====
 class ElderlyThemeProvider {
-  +fontScale: number
+  +fontScale: number (1.0-2.0)
   +largeTextMode: boolean
   +highContrast: boolean
   +reducedMotion: boolean
-  +spacing: number
+  +spacing: number (dp)
   +primaryColor: string
   +backgroundColor: string
   +toggleLargeText(): void
   +setFontScale(scale: number): void
   +toggleHighContrast(): void
+  +toggleReducedMotion(): void
+  +persistSettings(): Promise<void>
+  +loadSettings(): Promise<void>
 }
 
 class "useElderlyTheme()" as useElderlyTheme {
   +fontScale: number
   +largeTextMode: boolean
+  +highContrast: boolean
   +spacing: number
+  +primaryColor: string
   +toggleLargeText(): void
-  +setFontScale(): void
+  +setFontScale(scale: number): void
 }
 
-class VoiceService {
-  -language: string
+' ===== Services =====
+class VoiceService <<singleton>> {
+  -language: string = "zh-CN"
   -isListening: boolean
-  +init(config): Promise<void>
-  +start(): void
-  +stop(): void
-  +onResult(callback): void
-  +speak(text): void
-  +recognizeWithConfidence(): Promise<{text, confidence}>
+  -recognitionTimeout: number = 5000
+  +init(config: VoiceConfig): Promise<void>
+  +start(): Promise<void>
+  +stop(): Promise<void>
+  +onResult(callback: (text: string) => void): void
+  +onError(callback: (error: VoiceError) => void): void
+  +speak(text: string): Promise<void>
+  +recognizeWithConfidence(): Promise<VoiceResult>
+  +cancel(): Promise<void>
+  +isAvailable(): Promise<boolean>
+  +destroy(): void
 }
 
 class RideService {
-  +createOrder(params): Promise<Order>
-  +cancelOrder(orderId): Promise<void>
-  +getStatus(orderId): Promise<Status>
-  +getDriverInfo(orderId): Promise<DriverInfo>
-  +expandMatchRange(orderId): Promise<void>
-  +setPriorityDispatch(orderId, type): Promise<void>
+  -apiClient: ApiClient
+  -retryConfig: RetryConfig
+  +createOrder(params: CreateOrderParams): Promise<Order>
+  +cancelOrder(orderId: string): Promise<void>
+  +getStatus(orderId: string): Promise<OrderStatus>
+  +getDriverInfo(orderId: string): Promise<DriverInfo>
+  +expandMatchRange(orderId: string): Promise<void>
+  +setPriorityDispatch(orderId: string, type: PriorityType): Promise<void>
+  +getHistory(page: number, size: number): Promise<Order[]>
+  +subscribeStatus(orderId: string, callback: (status: OrderStatus) => void): () => void
 }
 
 class PaymentService {
-  +selfPay(orderId): Promise<Receipt>
-  +cashPay(orderId): Promise<Receipt>
-  +familyPay(orderId, contact): Promise<void>
-  +getStatus(orderId): Promise<PaymentStatus>
-  +sendPayLink(orderId, phone): Promise<void>
+  -apiClient: ApiClient
+  +selfPay(orderId: string): Promise<Receipt>
+  +cashPay(orderId: string): Promise<Receipt>
+  +familyPay(orderId: string, contact: FamilyContact): Promise<void>
+  +getStatus(orderId: string): Promise<PaymentStatus>
+  +sendPayLink(orderId: string, phone: string): Promise<void>
+  +resendPayLink(orderId: string): Promise<void>
+  +pollPaymentStatus(orderId: string, timeoutMs: number): Promise<PaymentStatus>
 }
 
 class SafetyService {
-  +shareLocation(orderId, family): Promise<void>
-  +startTripRecording(orderId): void
-  +triggerSOS(orderId, location): Promise<EmergencyResponse>
-  +verifyPlateNumber(orderId, plate): Promise<boolean>
-  +notifyFamily(orderId, event): Promise<void>
+  -apiClient: ApiClient
+  +shareLocation(orderId: string, family: FamilyContact[]): Promise<void>
+  +startTripRecording(orderId: string): void
+  +stopTripRecording(orderId: string): void
+  +triggerSOS(orderId: string, location: Location, callAmbulance: boolean): Promise<EmergencyResponse>
+  +verifyPlateNumber(orderId: string, plate: string): Promise<PlateVerificationResult>
+  +notifyFamily(orderId: string, event: string): Promise<void>
+  +cancelSOS(sosId: string, isFalseAlarm: boolean): Promise<void>
+  +broadcastEmergency(params: EmergencyBroadcastParams): Promise<void>
 }
 
+class ApiClient {
+  -baseUrl: string
+  -offlineQueue: OfflineRequest[]
+  -retryConfig: RetryConfig
+  +request<T>(url: string, options: RequestInit, retry?: RetryConfig): Promise<T>
+  -queueOffline<T>(url: string, options: RequestInit): Promise<T>
+  -flushOfflineQueue(): Promise<void>
+  +setAuthToken(token: string): void
+  +clearAuthToken(): void
+}
+
+class StationService {
+  -apiClient: ApiClient
+  +resolveStation(stationId: string): Promise<StationInfo>
+  +searchNearby(lat: number, lng: number, radius: number): Promise<StationInfo[]>
+  +getStationQR(stationId: string): Promise<string>
+}
+
+' ===== Screens =====
 class HomeScreen {
   -homeAddress: string
-  -recentDest: string
+  -recentDestinations: string[]
+  -weatherInfo: WeatherInfo
   +handleOneTapHome(): void
+  +handleRecentDestination(index: number): void
+  +loadHomeAddress(): Promise<void>
+  +loadRecentDestinations(): Promise<void>
 }
 
 class VoiceBookingScreen {
   -destination: string
   -candidates: Destination[]
+  -confidence: number
   -showConfirm: boolean
   -isBooking: boolean
-  +handleVoiceResult(text): void
-  +handleCandidateSelect(): void
-  +handleConfirmBooking(): void
+  -retryCount: number
+  +handleVoiceResult(result: VoiceResult): void
+  +handleCandidateSelect(destination: Destination): void
+  +handleConfirmBooking(): Promise<void>
+  +handleManualFallback(): void
+  +resetState(): void
 }
 
 class QRBookingScreen {
-  +scanQRCode(): void
-  +handleStationBooking(stationId): void
+  -station: StationInfo
+  -destination: string
+  -showConfirm: boolean
+  -booking: boolean
+  +handleQRScanned(payload: string): void
+  +handleStationBooking(stationId: string): Promise<void>
+  +handleConfirmBooking(): Promise<void>
+  +handleManualFallback(): void
 }
 
 class HotlineBookingScreen {
-  +dial95128(): void
+  -dialing: boolean
+  -showConfirm: boolean
+  +dial95128(): Promise<void>
+  +persistHotlineMarker(): Promise<void>
 }
 
 class RideStatusScreen {
   -driver: DriverInfo
-  -status: 'matching' | 'assigned' | 'arriving' | 'arrived'
+  -status: RideStatus
   -plateVerified: boolean
-  +handlePlateVerify(plate): void
+  -eta: number
+  +handlePlateVerify(plate: string): void
+  +handleCallDriver(): void
+  +handleCancelRide(): void
+  +handleSOSTrigger(): void
+  +subscribeStatusUpdates(): void
+}
+
+class SafetyGuardScreen {
+  -ride: RideSafetyState
+  -shareWithFamily: boolean
+  -tripRecording: boolean
+  -familyContacts: string[]
+  +handleToggleShare(enabled: boolean): void
+  +handleToggleRecording(enabled: boolean): void
+  +handleCallFamily(): void
+  +handlePlateVerify(): void
+  +handleSOS(): void
+  +handleInviteFamily(): void
+}
+
+class SOSEmergencyScreen {
+  -phase: SOSPhase
+  -countdown: number
+  -callAmbulance: boolean
+  -showDispatched: boolean
+  +triggerSOS(): void
+  +cancelSOS(): void
+  +dispatchEmergency(): Promise<void>
+  +confirmSafe(): void
+  +confirmFalseAlarm(): void
 }
 
 class FamilyPayScreen {
   -trip: TripSummary
   -sending: boolean
-  +handleFamilyPay(): void
+  -familyContacts: FamilyContact[]
+  +handleFamilyPay(): Promise<void>
+  +handleSelfPay(): Promise<void>
+  +handleCashPay(): Promise<void>
+  +pickContact(): Promise<FamilyContact>
 }
 
 class SettingsScreen {
   -previewScale: number
-  +handleSave(): void
+  -largeTextMode: boolean
+  -highContrast: boolean
+  -reducedMotion: boolean
+  +handleSave(): Promise<void>
+  +handleReset(): void
+  +handleExportSettings(): void
 }
 
+class TripHistoryScreen {
+  -trips: Trip[]
+  -state: ScreenState<Trip[]>
+  +fetchTrips(): Promise<void>
+  +handleTripPress(trip: Trip): void
+}
+
+class ProfileScreen {
+  -user: UserProfile
+  -homeAddress: string
+  -familyContacts: FamilyContact[]
+  +handleSaveProfile(): Promise<void>
+  +handleAddFamilyContact(): void
+  +handleRemoveFamilyContact(id: string): void
+  +setHomeAddress(address: string): Promise<void>
+}
+
+' ===== Components =====
 class ElderlyButton {
   +onPress: () => void
-  +variant: 'primary' | 'secondary' | 'danger' | 'back' | 'sos'
+  +variant: 'primary' | 'secondary' | 'danger' | 'back'
   +size: 'large' | 'medium'
   +icon: string
   +disabled: boolean
   +loading: boolean
   +haptic: boolean
+  +accessibilityLabel: string
+  +accessibilityRole: string
+  +hitSlop: Insets
 }
 
 class ElderlyTextInput {
   +value: string
-  +onChangeText: (text) => void
+  +onChangeText: (text: string) => void
+  +placeholder: string
   +voiceEnabled: boolean
-  +onVoiceResult: (text) => void
+  +onVoiceResult: (text: string) => void
   +clearable: boolean
   +fontSize: number
+  +error: string
+  +accessibilityLabel: string
 }
 
 class OneTapCard {
@@ -129,6 +252,7 @@ class OneTapCard {
   +onPress: () => void
   +disabled: boolean
   +badge: string
+  +accessibilityLabel: string
 }
 
 class LargeText {
@@ -136,41 +260,197 @@ class LargeText {
   +color: string
   +bold: boolean
   +center: boolean
+  +accessibilityRole: string
+  +maxFontSizeMultiplier: number
 }
 
 class ElderlyModal {
   +visible: boolean
   +title: string
   +message: string
-  +variant: 'info' | 'warning' | 'danger'
-  +primaryBtn: {label, onPress}
-  +secondaryBtn: {label, onPress}
+  +variant: 'info' | 'warning' | 'danger' | 'success'
+  +primaryBtn: ModalButton
+  +secondaryBtn: ModalButton
+  +onDismiss: () => void
+  +accessibilityViewIsModal: boolean
 }
 
 class ElderlyBottomNav {
   +items: NavItem[]
   +active: number
+  +accessibilityLabel: string
+}
+
+class ElderlyVoiceInput {
+  +onResult: (text: string) => void
+  +placeholder: string
+  +isListening: boolean
+  +transcript: string
+  +startListening(): Promise<void>
+  +stopListening(): void
 }
 
 class SOSButton {
-  +onSOS(): void
-  +confirmBeforeTrigger: boolean
-  +countdownSeconds: number
+  +onTrigger: () => void
+  +holdSeconds: number
+  +disabled: boolean
+  +size: 'large' | 'medium'
+  +accessibilityLabel: string
+  -timerRef: NodeJS.Timeout
+  -startCountdown(): void
+  -cancelCountdown(): void
 }
 
 class LiveLocationCard {
-  +tripId: string
-  +driverLocation: Location
-  +eta: number
-  +onCallDriver(): void
+  +driverName: string
+  +driverLat: number
+  +driverLng: number
+  +etaMinutes: number
+  +onShareWithFamily: () => void
+  +onCallDriver: () => void
 }
 
+class QRScanner {
+  +onScanned: (payload: string) => void
+  +onError: (error: Error) => void
+  +style: ViewStyle
+  +startScan(): void
+  +stopScan(): void
+}
+
+class ScreenStateHandler<T> {
+  +state: ScreenState<T>
+  +onRetry: () => void
+  +fallbackAction: FallbackAction
+  +children: (data: T) => ReactNode
+}
+
+' ===== Domain Models =====
+class User <<entity>> {
+  +id: string
+  +phone: string
+  +name: string
+  +age: number
+  +homeAddress: string
+  +homeLat: number
+  +homeLng: number
+  +fontScale: number
+  +largeTextMode: boolean
+  +highContrast: boolean
+  +paymentPreference: PaymentMethod
+  +createdAt: DateTime
+  +updatedAt: DateTime
+}
+
+class FamilyContact <<entity>> {
+  +id: string
+  +userId: string
+  +name: string
+  +phone: string
+  +relation: string
+  +isEmergencyContact: boolean
+  +notifyOnTrip: boolean
+  +createdAt: DateTime
+}
+
+class Order <<entity>> {
+  +id: string
+  +userId: string
+  +pickupAddress: string
+  +pickupLat: number
+  +pickupLng: number
+  +destAddress: string
+  +destLat: number
+  +destLng: number
+  +status: OrderStatus
+  +priorityType: PriorityType
+  +entryType: EntryType
+  +stationId: string
+  +fareEstimate: number
+  +driverId: string
+  +matchRadius: number
+  +expandedAt: DateTime
+  +createdAt: DateTime
+  +updatedAt: DateTime
+}
+
+class Driver <<entity>> {
+  +id: string
+  +phone: string
+  +name: string
+  +plateNumber: string
+  +carModel: string
+  +carColor: string
+  +rating: number
+  +status: DriverStatus
+  +currentLat: number
+  +currentLng: number
+  +lastLocationUpdate: DateTime
+  +createdAt: DateTime
+}
+
+class Payment <<entity>> {
+  +id: string
+  +orderId: string
+  +amount: number
+  +method: PaymentMethod
+  +status: PaymentStatus
+  +familyContactId: string
+  +payLink: string
+  +payLinkExpiresAt: DateTime
+  +paidAt: DateTime
+  +createdAt: DateTime
+}
+
+class SOSEvent <<entity>> {
+  +id: string
+  +orderId: string
+  +userId: string
+  +triggeredAt: DateTime
+  +locationLat: number
+  +locationLng: number
+  +callAmbulance: boolean
+  +servicesDispatched: string[]
+  +familyNotified: boolean
+  +recordingStarted: boolean
+  +resolvedAt: DateTime
+  +isFalseAlarm: boolean
+  +resolutionNotes: string
+  +createdAt: DateTime
+}
+
+class TripRecording <<entity>> {
+  +id: string
+  +orderId: string
+  +recordingUrl: string
+  +startedAt: DateTime
+  +endedAt: DateTime
+  +durationSeconds: number
+  +triggeredBy: string
+  +storageBucket: string
+  +storageKey: string
+  +createdAt: DateTime
+}
+
+class PlateVerification <<entity>> {
+  +id: string
+  +orderId: string
+  +expectedPlate: string
+  +actualPlate: string
+  +matched: boolean
+  +userAction: string
+  +familyNotified: boolean
+  +verifiedAt: DateTime
+}
+
+' ===== Test Models =====
 class UsabilityTestSession {
   +userId: string
   +userAge: number
   +date: string
   +tasks: UsabilityTask[]
   +overallSatisfaction: number
+  +notes: string
 }
 
 class UsabilityTask {
@@ -183,56 +463,108 @@ class UsabilityTask {
   +satisfaction: number
 }
 
-ElderlyThemeProvider ..> useElderlyTheme : provides
-HomeScreen ..> useElderlyTheme : uses
-SettingsScreen ..> useElderlyTheme : uses
+' ===== Relationships =====
+ElderlyThemeProvider "1" ..> "1" useElderlyTheme : provides
 
-HomeScreen ..> OneTapCard : contains
-HomeScreen ..> ElderlyButton : contains
-HomeScreen ..> ElderlyBottomNav : contains
+HomeScreen "1" ..> "1" useElderlyTheme : uses
+VoiceBookingScreen "1" ..> "1" useElderlyTheme : uses
+SettingsScreen "1" ..> "1" useElderlyTheme : uses
+SafetyGuardScreen "1" ..> "1" useElderlyTheme : uses
 
-VoiceBookingScreen ..> ElderlyTextInput : contains
-VoiceBookingScreen ..> ElderlyModal : contains
-VoiceBookingScreen ..> ElderlyButton : contains
+HomeScreen "1" *-- "1..3" OneTapCard : contains
+HomeScreen "1" *-- "1" ElderlyButton : contains
+HomeScreen "1" *-- "1" ElderlyBottomNav : contains
 
-RideStatusScreen ..> ElderlyButton : contains
-RideStatusScreen ..> LiveLocationCard : contains
-RideStatusScreen ..> SOSButton : contains
-FamilyPayScreen ..> ElderlyButton : contains
-SettingsScreen ..> ElderlyButton : contains
+VoiceBookingScreen "1" *-- "1" ElderlyVoiceInput : contains
+VoiceBookingScreen "1" *-- "1" ElderlyModal : contains
+VoiceBookingScreen "1" *-- "1" ElderlyButton : contains
 
-VoiceBookingScreen ..> VoiceService : uses
-VoiceBookingScreen ..> RideService : uses
-RideStatusScreen ..> VoiceService : uses
-RideStatusScreen ..> RideService : uses
-RideStatusScreen ..> SafetyService : uses
+QRBookingScreen "1" *-- "1" QRScanner : contains
+QRBookingScreen "1" *-- "1" ElderlyTextInput : contains
+QRBookingScreen "1" *-- "1" ElderlyModal : contains
 
-QRBookingScreen ..> RideService : uses
-HotlineBookingScreen ..> RideService : uses
+HotlineBookingScreen "1" *-- "1" ElderlyModal : contains
 
-FamilyPayScreen ..> PaymentService : uses
+RideStatusScreen "1" *-- "1" LiveLocationCard : contains
+RideStatusScreen "1" *-- "1" SOSButton : contains
+RideStatusScreen "1" *-- "1" ElderlyModal : contains
 
-UsabilityTestSession "1" *-- "many" UsabilityTask
+SafetyGuardScreen "1" *-- "1" LiveLocationCard : contains
+SafetyGuardScreen "1" *-- "1" SOSButton : contains
+
+SOSEmergencyScreen "1" *-- "1" SOSButton : contains
+SOSEmergencyScreen "1" *-- "1" ElderlyModal : contains
+
+FamilyPayScreen "1" *-- "1" ElderlyModal : contains
+SettingsScreen "1" *-- "1" ElderlyButton : contains
+TripHistoryScreen "1" ..> "1" ScreenStateHandler : uses
+
+VoiceBookingScreen "1" ..> "1" VoiceService : uses
+VoiceBookingScreen "1" ..> "1" RideService : uses
+
+QRBookingScreen "1" ..> "1" StationService : uses
+QRBookingScreen "1" ..> "1" RideService : uses
+
+RideStatusScreen "1" ..> "1" VoiceService : uses
+RideStatusScreen "1" ..> "1" RideService : uses
+RideStatusScreen "1" ..> "1" SafetyService : uses
+
+SafetyGuardScreen "1" ..> "1" SafetyService : uses
+SOSEmergencyScreen "1" ..> "1" SafetyService : uses
+FamilyPayScreen "1" ..> "1" PaymentService : uses
+
+RideService "1" ..> "1" ApiClient : uses
+PaymentService "1" ..> "1" ApiClient : uses
+SafetyService "1" ..> "1" ApiClient : uses
+StationService "1" ..> "1" ApiClient : uses
+
+User "1" -- "0..*" FamilyContact : has
+User "1" -- "0..*" Order : places
+Order "1" -- "0..1" Driver : assigned_to
+Order "1" -- "0..1" Payment : has
+Order "1" -- "0..*" SOSEvent : triggers
+Order "1" -- "0..*" TripRecording : has
+Order "1" -- "0..*" PlateVerification : verifies
+
+UsabilityTestSession "1" *-- "1..*" UsabilityTask : contains
 
 note right of VoiceService
   Singleton 服务
   封装 react-native-voice
-  新增置信度返回
+  支持置信度返回
+  最大重试3次
+  超时5秒
 end note
 
 note bottom of ElderlyThemeProvider
   全局主题上下文
   持久化到 AsyncStorage
+  7个主题属性
 end note
 
 note right of SafetyService
-  新增安全服务
-  解决上错车/安全焦虑
-  紧急求助SOS
+  新增安全服务模块
+  5个核心方法:
+  - SOS调度(离线兜底)
+  - 车牌校验
+  - 位置共享
+  - 亲友通知
+  - 行程录音
 end note
 
 note bottom of PaymentService
   新增现金支付方法
   适配20%现金用户
+  支付轮询机制
+  超时自动转线上
 end note
+
+note bottom of ApiClient
+  网络韧性:
+  - 指数退避重试
+  - 离线队列
+  - 自动恢复
+  - 4xx不重试
+end note
+
 @enduml

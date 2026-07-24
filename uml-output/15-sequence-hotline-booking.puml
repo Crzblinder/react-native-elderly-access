@@ -1,0 +1,170 @@
+@startuml
+title 适老化打车平台 - 95128热线叫车完整链路时序图 (Hotline 95128 Booking Sequence)
+
+actor "老年用户\n(无智能手机)" as User
+participant "座机/功能机" as Phone
+participant "95128热线\n(人工客服)" as Hotline
+participant "客服系统\n(Operator System)" as Operator
+participant "后端API\n(Backend API)" as API
+participant "派单引擎\n(Dispatch Engine)" as Dispatch
+participant "司机端" as Driver
+participant "SMS网关" as SMS
+participant "亲友端" as Family
+
+== 1. 热线拨打 ==
+User -> Phone: 拨打95128
+activate Phone
+Phone -> Hotline: 接通热线
+activate Hotline
+
+Hotline -> Hotline: IVR语音导航\n"您好，95128助老打车热线\n正在为您转接人工客服"
+
+alt 热线繁忙
+  Hotline --> Phone: "热线繁忙，请稍后重试\n或使用APP一键叫车"
+  deactivate Hotline
+  deactivate Phone
+  stop
+else 接通客服
+  Hotline -> Operator: 转接人工客服
+  activate Operator
+  Operator --> User: "您好，请问您要从哪里出发？"
+end
+
+== 2. 信息采集 ==
+User --> Operator: 告知出发地和目的地\n"我要从幸福小区去人民医院"
+Operator -> Operator: 录入订单信息\n- 上车点: 幸福小区\n- 目的地: 人民医院\n- 乘客姓氏: 张大爷
+
+alt 地址不清晰
+  Operator --> User: "请问是哪个幸福小区？"
+  User --> Operator: "朝阳区幸福路88号"
+  Operator -> Operator: 通过POI搜索确认地址
+end
+
+Operator -> Operator: 确认是否需要就医优先\n(目的地为医院自动标记)
+
+alt 用户需要就医优先
+  Operator -> Operator: 标记优先级: hospital
+  note right: 竞品启发(P4)\n医院目的地自动优先派单
+end
+
+== 3. 订单创建 ==
+Operator -> API: POST /api/v1/rides\n{userId: null, pickup, destination, entryType: "hotline", priorityType: "hospital"}
+activate API
+API -> API: 创建订单\n(entryType: hotline, 来源: 95128人工)
+
+API -> Dispatch: 派单请求
+activate Dispatch
+Dispatch -> Dispatch: 匹配附近司机\n(就医优先: 权重1.5x)
+Dispatch -> Driver: 推送订单\n{上车点, 目的地, 备注: "95128热线叫车"}
+activate Driver
+Driver --> Dispatch: 接单确认
+deactivate Driver
+Dispatch --> API: 司机已匹配\n{driverId, plateNumber, eta}
+deactivate Dispatch
+
+API -> API: 更新订单状态: assigned
+API --> Operator: 返回订单信息\n{orderId, driver: {name, plate, eta}, fare: 28.00}
+deactivate API
+
+== 4. 确认与通知 ==
+Operator -> Operator: 生成确认信息
+Operator --> User: "已为您叫到车，司机王师傅\n车牌号京A·12345，白色卡罗拉\n预计5分钟到达，费用约28元"
+
+Operator -> SMS: 发送确认短信
+activate SMS
+SMS --> Phone: 短信通知\n"95128已为您叫车\n司机: 王师傅 京A·12345\n预计到达: 5分钟\n费用: ¥28.00\n如有问题请回拨95128"
+deactivate SMS
+
+Operator -> API: 发送短信通知
+activate API
+API -> SMS: 发送确认短信
+SMS --> Phone: 短信通知
+deactivate API
+
+Operator --> User: "请您在幸福小区门口等候\n白色丰田卡罗拉，车牌京A·12345"
+deactivate Operator
+
+alt 用户有亲友联系人
+  Operator -> API: 通知亲友
+  activate API
+  API -> Family: 推送行程通知\n"张大爷正在通过95128叫车\n目的地: 人民医院"
+  activate Family
+  Family --> API: 确认收到
+  deactivate Family
+  deactivate API
+end
+
+== 5. 等待接驾 ==
+loop 等待司机到达
+  Driver -> API: 更新位置
+  activate API
+  API -> API: 司机位置更新
+  deactivate API
+end
+
+Driver -> API: 到达上车点
+activate API
+API -> SMS: 发送到达通知
+SMS --> Phone: "司机已到达，请核对车牌后上车\n京A·12345 白色卡罗拉"
+deactivate API
+
+== 6. 上车确认 ==
+User -> Phone: 查看车牌号(短信)
+Phone --> User: 显示车牌信息
+
+User -> User: 核对车牌号
+
+alt 车牌匹配
+  User -> User: 上车
+  Driver -> API: 确认乘客上车
+  activate API
+  API -> API: 更新订单状态: in_trip
+  deactivate API
+else 车牌不匹配
+  User -> Phone: 回拨95128
+  Phone -> Hotline: 报告车牌不匹配
+  Hotline -> Operator: 客服介入
+  Operator -> API: 标记异常
+  Operator --> User: "已记录，请稍等，我们帮您核实"
+end
+
+== 7. 行程中 ==
+loop 行程进行中
+  Driver -> API: 位置更新
+  API -> API: 记录行程轨迹
+  Operator -> API: 客服可查看行程状态(可选)
+end
+
+== 8. 行程结束与支付 ==
+Driver -> API: 结束行程
+activate API
+API -> API: 计算费用\n(里程: 5.2km, 费用: ¥28.00)
+API -> API: 更新订单状态: completed
+API --> Driver: 账单确认
+deactivate API
+
+User -> Driver: 支付现金(¥28.00)
+Driver -> API: 确认收到现金
+activate API
+API -> API: 更新支付状态: paid(cash)
+API --> Driver: 确认收款
+deactivate API
+
+== 9. 行后关怀 ==
+API -> SMS: 发送行程完成通知
+activate SMS
+SMS --> Phone: "行程完成\n幸福小区 → 人民医院\n费用: ¥28.00(现金已付)\n感谢使用95128助老服务"
+deactivate SMS
+
+alt 目的地为医院
+  API -> SMS: 发送到达提醒
+  SMS --> Phone: "已到达人民医院，祝您顺利"
+end
+
+API -> Operator: 行程完成归档
+Operator -> Operator: 客服记录备注\n(满意度/特殊需求)
+
+deactivate Hotline
+deactivate Phone
+
+@enduml

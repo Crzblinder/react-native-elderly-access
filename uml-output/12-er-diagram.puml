@@ -1,0 +1,257 @@
+@startuml
+title 适老化打车平台 - 数据库ER实体关系图 (Entity Relationship Diagram)
+
+skinparam class {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontSize 14
+}
+
+entity "users\n用户表" as users {
+  *id : UUID <<PK>>
+  --
+  *phone : VARCHAR(11) <<UNIQUE>>
+  name : VARCHAR(50)
+  age : INT
+  home_address : TEXT
+  home_lat : DOUBLE PRECISION
+  home_lng : DOUBLE PRECISION
+  font_scale : NUMERIC(3,2) = 1.0
+  large_text_mode : BOOLEAN = TRUE
+  high_contrast : BOOLEAN = FALSE
+  reduced_motion : BOOLEAN = FALSE
+  payment_preference : VARCHAR(10) = 'online'
+  avatar_url : TEXT
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+
+entity "family_contacts\n亲友联系人" as family_contacts {
+  *id : UUID <<PK>>
+  --
+  *user_id : UUID <<FK>>
+  *name : VARCHAR(50)
+  *phone : VARCHAR(11)
+  relation : VARCHAR(20)
+  is_emergency_contact : BOOLEAN = FALSE
+  notify_on_trip : BOOLEAN = TRUE
+  created_at : TIMESTAMPTZ
+}
+
+entity "orders\n订单表" as orders {
+  *id : UUID <<PK>>
+  --
+  *user_id : UUID <<FK>>
+  *pickup_address : TEXT
+  *pickup_lat : DOUBLE PRECISION
+  *pickup_lng : DOUBLE PRECISION
+  *dest_address : TEXT
+  dest_lat : DOUBLE PRECISION
+  dest_lng : DOUBLE PRECISION
+  *status : VARCHAR(20) = 'matching'
+  priority_type : VARCHAR(10) = 'normal'
+  entry_type : VARCHAR(15)
+  station_id : VARCHAR(50)
+  fare_estimate : NUMERIC(10,2)
+  driver_id : UUID <<FK>>
+  match_radius : INT = 2000
+  expanded_at : TIMESTAMPTZ
+  started_at : TIMESTAMPTZ
+  completed_at : TIMESTAMPTZ
+  cancelled_at : TIMESTAMPTZ
+  cancel_reason : VARCHAR(100)
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+
+entity "drivers\n司机表" as drivers {
+  *id : UUID <<PK>>
+  --
+  *phone : VARCHAR(11) <<UNIQUE>>
+  *name : VARCHAR(50)
+  *plate_number : VARCHAR(10)
+  car_model : VARCHAR(50)
+  car_color : VARCHAR(20)
+  rating : NUMERIC(2,1) = 5.0
+  status : VARCHAR(15) = 'offline'
+  current_lat : DOUBLE PRECISION
+  current_lng : DOUBLE PRECISION
+  last_location_update : TIMESTAMPTZ
+  total_trips : INT = 0
+  created_at : TIMESTAMPTZ
+}
+
+entity "payments\n支付表" as payments {
+  *id : UUID <<PK>>
+  --
+  *order_id : UUID <<FK>>
+  *amount : NUMERIC(10,2)
+  *method : VARCHAR(10)
+  *status : VARCHAR(15) = 'pending'
+  family_contact_id : UUID <<FK>>
+  pay_link : VARCHAR(255)
+  pay_link_expires_at : TIMESTAMPTZ
+  confirmed_by_driver : UUID <<FK>>
+  paid_at : TIMESTAMPTZ
+  expired_at : TIMESTAMPTZ
+  created_at : TIMESTAMPTZ
+}
+
+entity "sos_events\nSOS事件" as sos_events {
+  *id : UUID <<PK>>
+  --
+  *order_id : UUID <<FK>>
+  *user_id : UUID <<FK>>
+  *triggered_at : TIMESTAMPTZ
+  location_lat : DOUBLE PRECISION
+  location_lng : DOUBLE PRECISION
+  call_ambulance : BOOLEAN = FALSE
+  services_dispatched : JSONB
+  family_notified : BOOLEAN = FALSE
+  recording_started : BOOLEAN = FALSE
+  platform_notified : BOOLEAN = FALSE
+  resolved_at : TIMESTAMPTZ
+  is_false_alarm : BOOLEAN = FALSE
+  resolution_notes : TEXT
+  created_at : TIMESTAMPTZ
+}
+
+entity "trip_recordings\n行程录音" as trip_recordings {
+  *id : UUID <<PK>>
+  --
+  *order_id : UUID <<FK>>
+  *recording_url : TEXT
+  *started_at : TIMESTAMPTZ
+  ended_at : TIMESTAMPTZ
+  duration_seconds : INT
+  triggered_by : VARCHAR(10)
+  storage_bucket : VARCHAR(100)
+  storage_key : VARCHAR(255)
+  file_size_bytes : BIGINT
+  created_at : TIMESTAMPTZ
+}
+
+entity "plate_verifications\n车牌校验" as plate_verifications {
+  *id : UUID <<PK>>
+  --
+  *order_id : UUID <<FK>>
+  *expected_plate : VARCHAR(10)
+  actual_plate : VARCHAR(10)
+  matched : BOOLEAN
+  user_action : VARCHAR(15)
+  family_notified : BOOLEAN = FALSE
+  verified_at : TIMESTAMPTZ
+}
+
+entity "warm_stations\n暖心车站" as warm_stations {
+  *id : UUID <<PK>>
+  --
+  *station_code : VARCHAR(50) <<UNIQUE>>
+  *name : VARCHAR(100)
+  *address : TEXT
+  *lat : DOUBLE PRECISION
+  *lng : DOUBLE PRECISION
+  community_name : VARCHAR(100)
+  city : VARCHAR(50)
+  district : VARCHAR(50)
+  status : VARCHAR(15) = 'active'
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+
+entity "user_settings\n用户设置" as user_settings {
+  *id : UUID <<PK>>
+  --
+  *user_id : UUID <<FK>> <<UNIQUE>>
+  voice_enabled : BOOLEAN = TRUE
+  safety_guard_enabled : BOOLEAN = TRUE
+  plate_verification_enabled : BOOLEAN = TRUE
+  medical_priority_enabled : BOOLEAN = FALSE
+  auto_expand_match : BOOLEAN = TRUE
+  tts_enabled : BOOLEAN = TRUE
+  haptic_enabled : BOOLEAN = TRUE
+  updated_at : TIMESTAMPTZ
+}
+
+entity "ride_events\n行程事件日志" as ride_events {
+  *id : UUID <<PK>>
+  --
+  *order_id : UUID <<FK>>
+  *event_type : VARCHAR(30)
+  *event_data : JSONB
+  *occurred_at : TIMESTAMPTZ
+  created_at : TIMESTAMPTZ
+}
+
+entity "audit_logs\n审计日志" as audit_logs {
+  *id : UUID <<PK>>
+  --
+  *user_id : UUID <<FK>>
+  *action : VARCHAR(50)
+  *resource_type : VARCHAR(30)
+  *resource_id : UUID
+  *details : JSONB
+  *ip_address : INET
+  *user_agent : TEXT
+  *created_at : TIMESTAMPTZ
+}
+
+' ===== Relationships =====
+users ||--o{ family_contacts : "has\n(1:N)"
+users ||--o{ orders : "places\n(1:N)"
+users ||--|| user_settings : "configures\n(1:1)"
+users ||--o{ sos_events : "triggers\n(1:N)"
+users ||--o{ audit_logs : "generates\n(1:N)"
+
+orders }o--|| drivers : "assigned_to\n(N:1)"
+orders ||--o| payments : "has\n(1:0..1)"
+orders ||--o{ sos_events : "triggers\n(1:N)"
+orders ||--o{ trip_recordings : "records\n(1:N)"
+orders ||--o{ plate_verifications : "verifies\n(1:N)"
+orders ||--o{ ride_events : "logs\n(1:N)"
+
+orders }o--o| warm_stations : "originates_from\n(N:0..1)"
+
+payments }o--o| family_contacts : "paid_by\n(N:0..1)"
+payments }o--o| drivers : "confirmed_by\n(N:0..1)"
+
+' ===== Notes =====
+note right of orders
+  CHECK约束:
+  status IN ('matching','matching_expanded',
+    'assigned','arriving','arrived',
+    'in_trip','completed','cancelled')
+  priority_type IN ('normal','hospital')
+  entry_type IN ('one_tap','voice','qr_station','hotline')
+end note
+
+note right of payments
+  CHECK约束:
+  method IN ('online','cash','family')
+  status IN ('pending','paid','expired','refunded')
+end note
+
+note bottom of sos_events
+  services_dispatched JSONB示例:
+  ["110", "120"]
+  
+  关键索引:
+  idx_sos_events_order
+  idx_sos_events_user
+  idx_sos_events_triggered
+end note
+
+note bottom of drivers
+  司机位置通过Redis实时更新
+  DB存储最近一次位置快照
+  Redis Key: driver:loc:{driverId}
+  TTL: 30s
+end note
+
+note right of audit_logs
+  所有SOS事件、支付交易、
+  登录尝试均需审计记录
+  保留期: 1年
+end note
+
+@enduml

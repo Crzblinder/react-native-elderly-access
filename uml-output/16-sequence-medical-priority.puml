@@ -1,0 +1,143 @@
+@startuml
+title 适老化打车平台 - 就医优先派单完整链路时序图 (Medical Priority Dispatch Sequence)
+
+actor "老年用户" as User
+participant "APP前端\n(React Native)" as App
+participant "后端API\n(Backend API)" as API
+participant "POI识别服务\n(POI Service)" as POI
+participant "派单引擎\n(Dispatch Engine)" as Dispatch
+participant "司机端" as Driver
+participant "亲友端" as Family
+participant "SMS网关" as SMS
+
+== 1. 目的地输入 ==
+User -> App: 说出目的地\n"我要去人民医院"
+activate App
+App -> App: 语音识别: "人民医院"
+App -> App: 解析意图: RIDE_TO
+
+App -> API: POST /api/v1/poi/classify\n{name: "人民医院", lat, lng}
+activate API
+API -> POI: 查询POI类别
+activate POI
+POI -> POI: 搜索POI数据库\n关键词: "人民医院"
+POI -> POI: 匹配分类: hospital\n置信度: 0.98
+POI --> API: {category: "hospital", confidence: 0.98, subCategory: "general_hospital"}
+deactivate POI
+
+API -> API: 判断目的地类型
+alt 置信度 >= 0.8
+  API -> API: 自动标记: priorityType = "hospital"
+  note right: 竞品启发(P4)\n滴滴已验证202k+次\n就医优先派单
+else 置信度 < 0.8
+  API --> App: 返回候选POI列表
+  App --> User: 展示候选列表\n"请选择目的地类型"
+  User -> App: 选择"医院"
+end
+
+API --> App: 返回POI分类结果\n{category: "hospital", priorityType: "hospital"}
+deactivate API
+
+== 2. 就医优先确认 ==
+App -> App: 大字弹窗确认\n"目的地: 人民医院(医院)\n为您开启就医优先派单"
+App -> App: TTS播报: "检测到目的地为医院，为您优先匹配附近车辆"
+
+alt 用户确认
+  User -> App: 点击"确认叫车"
+  App -> App: 构建订单请求\n{priorityType: "hospital"}
+else 用户取消(非医院)
+  User -> App: 点击"这不是医院"
+  App -> App: 构建订单请求\n{priorityType: "normal"}
+  note right: 用户可手动关闭\n就医优先标识
+end
+
+== 3. 就医优先派单 ==
+App -> API: POST /api/v1/rides\n{userId, pickup, destination, priorityType: "hospital"}
+activate API
+API -> API: 创建订单\n(priorityType: hospital)
+
+API -> Dispatch: 派单请求\n{priorityType: "hospital", location, matchRadius: 2000}
+activate Dispatch
+
+Dispatch -> Dispatch: 查询附近司机\n(半径: 2km)
+Dispatch -> Dispatch: 计算匹配权重\n\n权重公式:\n  score = baseScore\n        + hospital_boost × 1.5\n        + distance_decay × 0.8\n        + rating_bonus × 0.2
+
+note right of Dispatch
+  就医优先权重策略:
+  - 医院目的地: ×1.5 权重提升
+  - 距离衰减: ×0.8 (扩大范围)
+  - 高评分司机: ×0.2 加成
+  - 扩大半径: 2km→3km→5km
+end note
+
+Dispatch -> Dispatch: 排序候选司机\n(按加权分降序)
+
+Dispatch -> Driver: 推送订单\n"就医优先-人民医院\n上车点: 幸福小区\n额外补贴: ¥5.00"
+activate Driver
+Driver -> Driver: 查看订单
+Driver --> Dispatch: 接单确认
+deactivate Driver
+
+Dispatch --> API: 司机已匹配\n{driverId, eta: 3min, priority: "hospital"}
+deactivate Dispatch
+
+API -> API: 更新订单状态: assigned\n(记录priorityType: hospital)
+API --> App: 返回订单信息\n{orderId, driver, eta: 3min, priorityBanner: "就医优先"}
+deactivate API
+
+== 4. 就医优先保障 ==
+App -> App: 大字展示\n"就医优先派单成功\n司机: 王师傅\n预计到达: 3分钟\n(比普通派单快约40%)"
+App -> App: TTS播报: "就医优先派单成功，司机预计3分钟到达"
+App --> User: 展示确认信息
+
+alt 3分钟无司机接单
+  App -> API: 请求扩大匹配范围
+  activate API
+  API -> Dispatch: expandMatchRange(orderId, 3000→5000)
+  activate Dispatch
+  Dispatch -> Dispatch: 扩大半径至5km
+  Dispatch -> Driver: 扩大范围推送
+  Dispatch --> API: 匹配范围已扩大
+  deactivate Dispatch
+  API --> App: 推送"正在扩大范围找车"
+  deactivate API
+  App -> App: TTS播报: "正在扩大范围为您找车，请稍候"
+end
+
+== 5. 行程通知亲友 ==
+App -> API: POST /api/v1/safety/notify-family\n{orderId, familyContacts, medicalNote: true}
+activate API
+API -> Family: 推送就医行程通知\n"父亲正在前往人民医院\n就医优先派单\n司机: 王师傅 京A·12345\n预计到达: 3分钟"
+activate Family
+Family --> API: 确认收到
+deactivate Family
+API --> App: 亲友已通知
+deactivate API
+
+== 6. 就医到达通知 ==
+Driver -> API: 到达人民医院
+activate API
+API -> API: 更新订单状态: arrived
+API --> App: 推送到达通知
+deactivate API
+
+App -> App: TTS播报: "已到达人民医院，祝您顺利"
+App --> User: 大字显示"已到达人民医院"
+
+API -> Family: 推送就医到达通知\n"父亲已到达人民医院"
+activate Family
+Family --> API: 确认收到
+deactivate Family
+
+== 7. 行后关怀 ==
+API -> App: 推送就医关怀\n"您已到达医院，祝您早日康复"
+App -> App: 大字展示关怀信息
+
+API -> SMS: 发送就医到达通知(可选)
+activate SMS
+SMS --> User: "已到达人民医院\n祝您一切顺利"
+deactivate SMS
+
+API -> API: 记录就医派单统计\n- 订单ID: xxx\n- 派单时间: 2.5min\n- 节省时间: 40% vs 普通派单\n- 司机补贴: ¥5.00
+
+@enduml

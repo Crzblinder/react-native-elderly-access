@@ -1,0 +1,195 @@
+@startuml
+title 适老化打车平台 - 部署架构图 (Deployment Diagram)
+
+skinparam node {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontSize 14
+}
+
+skinparam component {
+  BackgroundColor #FFFFFF
+  BorderColor #1565C0
+  FontSize 13
+}
+
+skinparam database {
+  BackgroundColor #E8F5E9
+  BorderColor #2E7D32
+}
+
+skinparam cloud {
+  BackgroundColor #F3E5F5
+  BorderColor #7B1FA2
+}
+
+' ===== 用户设备层 =====
+node "老年用户手机\n(Android 8+ / iOS 14+)" as ElderlyPhone {
+  component "React Native App" as RN_APP_E
+  component "AsyncStorage\n(本地缓存)" as AS_E
+  component "Voice SDK\n(语音识别)" as VOICE_SDK
+  component "QR Scanner\n(扫码)" as QR_SCAN
+}
+
+node "亲友用户手机\n(Android/iOS)" as FamilyPhone {
+  component "WebView / H5\n(支付+位置查看)" as FAMILY_WEB
+  component "短信/微信\n(通知接收)" as FAMILY_SMS
+}
+
+node "司机端设备\n(Android)" as DriverDevice {
+  component "Driver App\n(接单/导航/确认收款)" as DRIVER_APP
+  component "GPS Tracking\n(位置上报)" as GPS_TRACK
+}
+
+' ===== 外部服务层 =====
+cloud "External Services" {
+  component "95128热线\n(人工客服)" as HOTLINE_95128
+  component "暖心车站\n(QR Code Stations)" as WARM_STATIONS
+  component "110/120\n(紧急服务)" as EMERGENCY_SVC
+  component "SMS Gateway\n(短信网关)" as SMS_GW
+}
+
+' ===== 云端服务层 =====
+cloud "Cloud Infrastructure\n(AWS/Aliyun)" as CLOUD {
+
+  node "CDN / Edge" {
+    component "Static Assets\n(图片/字体)" as CDN
+  }
+
+  node "API Gateway\n(Kong/Nginx)" as API_GW {
+    component "Rate Limiter\n(限流)" as RATE_LIMIT
+    component "Auth Middleware\n(认证)" as AUTH_MW
+    component "Logging\n(日志)" as LOG_MW
+  }
+
+  node "Microservices Cluster\n(K8s)" as K8S {
+
+    node "Ride Service\n(订单服务)" as RIDE_SVC {
+      component "Order CRUD" as ORDER_CRUD
+      component "Dispatch Engine\n(派单引擎)" as DISPATCH
+      component "Medical Priority\n(就医优先)" as MED_PRIORITY
+    }
+
+    node "Payment Service\n(支付服务)" as PAY_SVC {
+      component "Payment Gateway\n(微信/支付宝)" as PAY_GW
+      component "Cash Settlement\n(现金结算)" as CASH_SETTLE
+      component "Family Pay\n(亲友代付)" as FAMILY_PAY
+    }
+
+    node "Safety Service\n(安全服务)" as SAFETY_SVC {
+      component "SOS Handler\n(紧急求助处理)" as SOS_HANDLER
+      component "Location Sharing\n(位置共享)" as LOC_SHARE
+      component "Trip Recording\n(行程录音)" as TRIP_RECORD
+      component "Plate Verification\n(车牌校验)" as PLATE_VERIFY
+    }
+
+    node "Voice Service\n(语音服务)" as VOICE_SVC {
+      component "STT Engine\n(语音转文字)" as STT
+      component "TTS Engine\n(文字转语音)" as TTS
+      component "Intent Parser\n(意图解析)" as INTENT_PARSER
+    }
+
+    node "Notification Service\n(通知服务)" as NOTIFY_SVC {
+      component "Push Notifications\n(FCM/APNs)" as PUSH
+      component "SMS Sender\n(短信发送)" as SMS_SENDER
+    }
+
+    node "User Service\n(用户服务)" as USER_SVC {
+      component "Auth\n(认证)" as AUTH
+      component "Profile\n(用户信息)" as PROFILE
+      component "Family Contacts\n(亲友管理)" as FAMILY_CONTACTS
+    }
+  }
+
+  ' ===== 数据层 =====
+  database "Primary Database\n(PostgreSQL)" as PG {
+    component "users" as DB_USERS
+    component "orders" as DB_ORDERS
+    component "payments" as DB_PAYMENTS
+    component "trips" as DB_TRIPS
+    component "sos_events" as DB_SOS
+    component "family_contacts" as DB_FAMILY
+  }
+
+  database "Cache\n(Redis)" as REDIS {
+    component "Session Cache\n(用户会话)" as CACHE_SESSION
+    component "Location Cache\n(实时位置)" as CACHE_LOC
+    component "Rate Limit\n(限流计数)" as CACHE_RATE
+  }
+
+  database "Object Storage\n(S3/OSS)" as S3 {
+    component "Trip Recordings\n(行程录音)" as S3_REC
+    component "QR Station Images\n(站点图片)" as S3_QR
+  }
+
+  database "Search Engine\n(Elasticsearch)" as ES {
+    component "Order Search\n(订单搜索)" as ES_ORDER
+    component "Log Analysis\n(日志分析)" as ES_LOG
+  }
+
+  node "Monitoring\n(Prometheus + Grafana)" as MONITOR {
+    component "Metrics\n(指标)" as METRICS
+    component "Alerting\n(告警)" as ALERTS
+    component "Tracing\n(链路追踪)" as TRACING
+  }
+}
+
+' ===== 连接关系 =====
+ElderlyPhone --> API_GW : HTTPS/REST
+FamilyPhone --> API_GW : HTTPS/REST
+DriverDevice --> API_GW : HTTPS/REST
+
+ElderlyPhone --> WARM_STATIONS : QR Scan
+ElderlyPhone --> HOTLINE_95128 : Tel Call
+DRIVER_APP --> EMERGENCY_SVC : SOS Trigger
+
+API_GW --> K8S : Internal gRPC/REST
+
+RIDE_SVC --> PG : Read/Write
+RIDE_SVC --> REDIS : Location Cache
+RIDE_SVC --> ES : Index
+
+PAY_SVC --> PG : Read/Write
+PAY_SVC --> SMS_GW : Payment Link
+
+SAFETY_SVC --> PG : Read/Write
+SAFETY_SVC --> S3 : Store Recordings
+SAFETY_SVC --> EMERGENCY_SVC : SOS Dispatch
+
+VOICE_SVC --> REDIS : Session Cache
+
+NOTIFY_SVC --> SMS_GW : SMS
+NOTIFY_SVC --> FAMILY_SMS : Push
+
+USER_SVC --> PG : Read/Write
+USER_SVC --> REDIS : Session
+
+MONITOR --> K8S : Metrics
+MONITOR --> PG : Health Check
+MONITOR --> REDIS : Health Check
+
+note right of K8S
+  微服务架构:
+  - 服务独立部署、独立扩缩容
+  - 服务间通过gRPC通信
+  - 安全服务为高优先级(独立扩缩)
+  - 语音服务需要GPU资源(STT/TTS)
+end note
+
+note bottom of PG
+  数据分库策略:
+  - orders/trips: 按时间分区
+  - sos_events: 独立库, 高安全级别
+  - payments: 独立库, PCI合规
+  - 读写分离: 主库写, 从库读
+end note
+
+note right of REDIS
+  缓存策略:
+  - 司机位置: 每5秒更新, TTL 30s
+  - 用户会话: TTL 24h
+  - 限流: 滑动窗口, 1分钟
+  - SOS状态: 持久化, 不过期
+end note
+
+@enduml

@@ -1,0 +1,184 @@
+@startuml
+title 适老化打车平台 - 一键叫车完整链路时序图 (One-Tap Booking Sequence)
+
+actor "老年用户" as User
+participant "APP前端\n(React Native)" as App
+participant "主题服务\n(ElderlyTheme)" as Theme
+participant "后端API\n(Backend API)" as API
+participant "派单引擎\n(Dispatch Engine)" as Dispatch
+participant "司机端" as Driver
+participant "亲友端" as Family
+participant "安全服务\n(SafetyService)" as Safety
+
+== 1. 应用启动与地址加载 ==
+User -> App: 打开APP
+activate App
+App -> Theme: 加载字体/主题设置
+activate Theme
+Theme -> Theme: 从AsyncStorage读取\n{fontScale, highContrast, reducedMotion}
+Theme --> App: 应用主题\n(字体: 1.5x, 对比度: 高)
+deactivate Theme
+
+App -> App: 检查登录状态
+alt 未登录
+  App -> App: 显示登录页\n(手机号+验证码)
+  User -> App: 输入手机号
+  App -> API: POST /api/v1/auth/login\n{phone}
+  activate API
+  API -> API: 发送验证码短信
+  API --> App: 验证码已发送
+  deactivate API
+  User -> App: 输入验证码
+  App -> API: POST /api/v1/auth/verify\n{phone, code}
+  activate API
+  API --> App: {token, user}
+  deactivate API
+end
+
+App -> API: GET /api/v1/users/{userId}/profile
+activate API
+API --> App: {homeAddress, recentDestinations, familyContacts}
+deactivate API
+
+== 2. 首页展示 ==
+App -> App: 渲染首页\n(大字模式 + 问候语)
+App --> User: 显示首页\n"您好，张大爷！"
+
+alt 已设置家庭地址
+  App -> App: 显示"一键打车回家"卡片\n{幸福小区3号楼}
+else 未设置家庭地址
+  App --> User: 显示"请先设置家庭地址"\n→ 跳转设置页
+  User -> App: 设置家庭地址
+  App -> API: PUT /api/v1/users/{userId}/profile\n{homeAddress: "幸福小区3号楼"}
+  activate API
+  API --> App: 保存成功
+  deactivate API
+end
+
+== 3. 一键叫车 ==
+User -> App: 点击"一键打车回家"
+activate App
+App -> App: 触觉反馈(50ms振动)
+App -> App: 构建订单请求\n{pickup: GPS定位, dest: 家庭地址}
+
+App -> API: POST /api/v1/rides\n{userId, pickup, destination, entryType: "one_tap"}
+activate API
+API -> API: 创建订单记录
+API -> API: 检查目的地类型
+
+alt 目的地为医院
+  API -> Dispatch: 就医优先派单\n(提升附近司机权重1.5x)
+  activate Dispatch
+  Dispatch -> Dispatch: 匹配半径: 2km\n权重: hospital × 1.5
+  note right: 滴滴已验证\n202k+次就医派单
+else 正常目的地
+  API -> Dispatch: 常规派单
+  activate Dispatch
+  Dispatch -> Dispatch: 匹配半径: 2km\n权重: normal
+end
+
+Dispatch -> Driver: 推送订单\n{上车点, 目的地, 预估费用}
+activate Driver
+Driver -> Driver: 查看订单
+Driver --> Dispatch: 接单确认
+deactivate Driver
+
+Dispatch --> API: 司机已匹配\n{driverId, eta, plateNumber}
+deactivate Dispatch
+
+API -> API: 更新订单状态: matching→assigned
+API --> App: 返回订单信息\n{orderId, driver, estimatedFare: 25.00, eta: 5min}
+deactivate API
+
+== 4. 确认与通知 ==
+App -> App: 大字展示确认信息\n"司机: 王师傅\n车牌: 京A·12345\n预计到达: 5分钟\n费用: ¥25.00"
+App -> App: TTS播报: "已为您匹配司机，预计5分钟到达"
+App --> User: 展示确认信息
+
+App -> API: POST /api/v1/safety/notify-family\n{orderId, familyContacts}
+activate API
+API -> Family: 推送行程通知\n"父亲已上车，点击查看实时位置"
+activate Family
+Family --> API: 确认收到
+deactivate Family
+API --> App: 亲友已通知(2人)
+deactivate API
+
+== 5. 等待接驾 ==
+Driver -> API: 更新位置\n(lat, lng, status: "arriving")
+activate API
+API --> App: 推送司机位置更新
+deactivate API
+
+App -> App: 更新地图显示(司机实时位置)
+App -> App: 更新ETA倒计时\n"预计到达: 4分钟"
+
+loop 每5秒位置更新
+  Driver -> API: 位置上报
+  API --> App: 位置同步
+  App -> App: 刷新地图
+end
+
+Driver -> API: 状态变更: "arrived"
+activate API
+API --> App: 司机已到达上车点
+deactivate API
+
+App -> App: TTS播报: "司机已到达，请核对车牌后上车"
+App --> User: 大字显示"司机已到达\n请核对车牌号"
+
+== 6. 车牌校验 ==
+User -> App: 查看车牌号
+App -> App: 显示车牌校验弹窗\n"请确认车牌号:\n京A·12345"
+
+alt 车牌匹配
+  User -> App: 点击"车牌正确，上车"
+  App -> Safety: verifyPlateNumber(orderId, plate)
+  activate Safety
+  Safety -> API: POST /api/v1/safety/plate-verify\n{orderId, expectedPlate, actualPlate}
+  activate API
+  API --> Safety: {match: true, action: "board"}
+  deactivate API
+  Safety --> App: 车牌校验通过
+  deactivate Safety
+  App -> App: TTS播报: "车牌号正确，请上车"
+  App --> User: "车牌号匹配，请上车"
+
+else 车牌不匹配
+  User -> App: 发现车牌不匹配
+  App -> Safety: verifyPlateNumber(orderId, unmatchedPlate)
+  activate Safety
+  Safety -> API: POST /api/v1/safety/plate-verify\n{orderId, expectedPlate, actualPlate, match: false}
+  activate API
+  API --> Safety: {match: false, warningLevel: "mismatch", action: "recheck"}
+  deactivate API
+  Safety -> Family: 紧急通知: "车牌号不匹配，请关注"
+  Safety --> App: 车牌不匹配警告
+  deactivate Safety
+  App -> App: 大字弹窗警告\n"⚠️ 车牌号不符，请勿上车！"
+  App -> App: TTS播报: "车牌号不符，请勿上车"
+  App --> User: 警告弹窗
+end
+
+deactivate App
+
+== 7. 行程中（安全守护） ==
+User -> App: 上车
+App -> API: 订单状态更新: in_trip
+activate API
+API -> Safety: 启动行程安全守护
+activate Safety
+Safety -> Safety: 开始位置共享\n(每5秒更新)
+Safety -> Family: 推送实时位置链接
+Safety --> API: 安全守护已启动
+deactivate Safety
+API --> App: 行程开始
+deactivate API
+
+loop 行程中
+  Driver -> API: 位置更新
+  API -> App: 同步位置
+  API -> Family: 同步位置(可选)
+end
+
+@enduml

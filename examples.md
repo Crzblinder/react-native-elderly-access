@@ -1519,3 +1519,522 @@ const testResults: UsabilityReport[] = [
 ];
 // Round 3 results: 95% completion, 90s avg task time, 92% satisfaction (4.6/5.0)
 ```
+
+---
+
+## 11. Network & Error Handling Patterns
+
+### 11.1 API Client with Retry & Offline Support
+
+```typescript
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
+
+type RetryConfig = {
+  maxRetries: number;
+  baseDelay: number; // ms
+  maxDelay: number;  // ms
+};
+
+const DEFAULT_RETRY: RetryConfig = { maxRetries: 3, baseDelay: 1000, maxDelay: 8000 };
+
+/**
+ * API client with automatic retry (exponential backoff)
+ * and offline request queueing.
+ */
+export class ApiClient {
+  private offlineQueue: Array<{ url: string; options: RequestInit; resolve: Function; reject: Function }> = [];
+
+  constructor() {
+    // Listen for network recovery
+    NetInfo.addEventListener((state) => {
+      if (state.isConnected && this.offlineQueue.length > 0) {
+        this.flushOfflineQueue();
+      }
+    });
+  }
+
+  async request<T>(
+    url: string,
+    options: RequestInit = {},
+    retryConfig: RetryConfig = DEFAULT_RETRY,
+  ): Promise<T> {
+    const state = await NetInfo.fetch();
+    if (!state.isConnected) {
+      return this.queueOffline<T>(url, options);
+    }
+
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
+      try {
+        const response = await fetch(url, {
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            ...options.headers,
+          },
+        });
+
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          const error = new ApiError(
+            response.status,
+            errorBody.error?.code || 'UNKNOWN',
+            errorBody.error?.message || '请求失败',
+            errorBody.error?.action || 'retry',
+          );
+
+          // Don't retry 4xx errors (except 429)
+          if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+            throw error;
+          }
+          throw error; // 5xx / 429 → retry
+        }
+
+        return (await response.json()) as T;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (attempt < retryConfig.maxRetries) {
+          const delay = Math.min(
+            retryConfig.baseDelay * Math.pow(2, attempt),
+            retryConfig.maxDelay,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    throw lastError || new Error('Request failed');
+  }
+
+  private async queueOffline<T>(url: string, options: RequestInit): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      this.offlineQueue.push({ url, options, resolve, reject });
+    });
+  }
+
+  private async flushOfflineQueue() {
+    const queue = [...this.offlineQueue];
+    this.offlineQueue = [];
+    for (const item of queue) {
+      try {
+        const result = await this.request(item.url, item.options, { maxRetries: 1, baseDelay: 500, maxDelay: 2000 });
+        item.resolve(result);
+      } catch (err) {
+        item.reject(err);
+      }
+    }
+  }
+}
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+    public action: 'retry' | 'fallback' | 'contact_support',
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+/**
+ * Convert API error codes to elderly-friendly Chinese messages.
+ * Never expose raw error codes to users.
+ */
+export function toUserFriendlyError(error: ApiError): { title: string; message: string; action: string } {
+  const map: Record<string, { title: string; message: string; action: string }> = {
+    '3003': { title: '暂无可用车辆', message: '附近暂无可用车辆，建议拨打 95128 热线叫车', action: '拨打 95128' },
+    '3004': { title: '未设置地址', message: '请先在"我的"页面设置家庭地址', action: '去设置' },
+    '4002': { title: '支付链接已过期', message: '支付链接已过期，请重新发送给家人', action: '重新发送' },
+    '6001': { title: '没有听清', message: '没有听清您说的话，请再说一次', action: '重新说' },
+    '6003': { title: '麦克风未开启', message: '请在手机设置中开启麦克风权限', action: '去设置' },
+    '7001': { title: '短信发送失败', message: '短信发送失败，请稍后重试', action: '重试' },
+  };
+  return map[error.code] || {
+    title: '网络异常',
+    message: '网络连接失败，请检查网络后重试',
+    action: '重试',
+  };
+}
+```
+
+### 11.2 Loading / Error / Empty State Pattern
+
+Every screen must handle three states. Use this pattern:
+
+```typescript
+import React, { useEffect, useState, useCallback } from 'react';
+import { SafeAreaView, View, ActivityIndicator, StyleSheet, Alert } from 'react-native';
+import { LargeText } from '../components/LargeText';
+import { ElderlyButton } from '../components/ElderlyButton';
+import { ApiClient, ApiError, toUserFriendlyError } from '../services/ApiClient';
+import NetInfo from '@react-native-community/netinfo';
+
+type ScreenState<T> =
+  | { status: 'loading' }
+  | { status: 'error'; error: ApiError; userMessage: ReturnType<typeof toUserFriendlyError> }
+  | { status: 'empty'; reason: string }
+  | { status: 'data'; data: T };
+
+/**
+ * Generic screen wrapper that handles loading/error/empty/data states.
+ * 
+ * Usage:
+ *   <ScreenStateHandler state={state} onRetry={fetchData}>
+ *     {(data) => <YourContent data={data} />}
+ *   </ScreenStateHandler>
+ */
+export function ScreenStateHandler<T>({
+  state,
+  onRetry,
+  fallbackAction,
+  children,
+}: {
+  state: ScreenState<T>;
+  onRetry: () => void;
+  fallbackAction?: { label: string; onPress: () => void };
+  children: (data: T) => React.ReactNode;
+}) {
+  const [isOffline, setIsOffline] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((netState) => {
+      setIsOffline(!netState.isConnected);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  if (isOffline && state.status === 'loading') {
+    return (
+      <View style={styles.centerContainer}>
+        <LargeText variant="heading" center bold color="#F57C00">
+          网络未连接
+        </LargeText>
+        <LargeText variant="body" center color="#555">
+          请检查网络连接后重试
+        </LargeText>
+        <ElderlyButton onPress={onRetry} icon="refresh">
+          重试
+        </ElderlyButton>
+        {fallbackAction && (
+          <ElderlyButton variant="secondary" onPress={fallbackAction.onPress}>
+            {fallbackAction.label}
+          </ElderlyButton>
+        )}
+      </View>
+    );
+  }
+
+  switch (state.status) {
+    case 'loading':
+      return (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#1565C0" />
+          <LargeText variant="body" center color="#555" style={{ marginTop: 16 }}>
+            正在加载...
+          </LargeText>
+        </View>
+      );
+
+    case 'error': {
+      const { userMessage } = state;
+      return (
+        <View style={styles.centerContainer}>
+          <LargeText variant="heading" center bold color="#D32F2F">
+            {userMessage.title}
+          </LargeText>
+          <LargeText variant="body" center color="#555">
+            {userMessage.message}
+          </LargeText>
+          <ElderlyButton onPress={onRetry} icon="refresh">
+            {userMessage.action}
+          </ElderlyButton>
+          <ElderlyButton variant="secondary" onPress={fallbackAction?.onPress || (() => {})}>
+            {fallbackAction?.label || '返回首页'}
+          </ElderlyButton>
+        </View>
+      );
+
+    case 'empty':
+      return (
+        <View style={styles.centerContainer}>
+          <LargeText variant="heading" center bold color="#666">
+            暂无内容
+          </LargeText>
+          <LargeText variant="body" center color="#555">
+            {state.reason}
+          </LargeText>
+          {fallbackAction && (
+            <ElderlyButton variant="secondary" onPress={fallbackAction.onPress}>
+              {fallbackAction.label}
+            </ElderlyButton>
+          )}
+        </View>
+      );
+
+    case 'data':
+      return <>{children(state.data)}</>;
+  }
+}
+
+const styles = StyleSheet.create({
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    gap: 20,
+  },
+});
+```
+
+### 11.3 Screen with Full State Handling Example
+
+```typescript
+export const TripHistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+  const [state, setState] = useState<ScreenState<Trip[]>>({ status: 'loading' });
+  const apiClient = useMemo(() => new ApiClient(), []);
+
+  const fetchTrips = useCallback(async () => {
+    setState({ status: 'loading' });
+    try {
+      const trips = await apiClient.request<Trip[]>('/api/v1/rides/history');
+      if (trips.length === 0) {
+        setState({ status: 'empty', reason: '您还没有行程记录，叫一次车吧！' });
+      } else {
+        setState({ status: 'data', data: trips });
+      }
+    } catch (err) {
+      const apiError = err instanceof ApiError ? err : new ApiError(0, 'UNKNOWN', '请求失败', 'retry');
+      setState({
+        status: 'error',
+        error: apiError,
+        userMessage: toUserFriendlyError(apiError),
+      });
+    }
+  }, []);
+
+  useEffect(() => { fetchTrips(); }, [fetchTrips]);
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FAFAFA' }}>
+      <ScreenStateHandler
+        state={state}
+        onRetry={fetchTrips}
+        fallbackAction={{ label: '返回首页', onPress: () => navigation.navigate('Home') }}
+      >
+        {(trips) => (
+          <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }}>
+            <LargeText variant="heading" bold>历史行程</LargeText>
+            {trips.map((trip) => (
+              <TripCard key={trip.id} trip={trip} />
+            ))}
+          </ScrollView>
+        )}
+      </ScreenStateHandler>
+    </SafeAreaView>
+  );
+};
+```
+
+### 11.4 Offline Data Caching Strategy
+
+```typescript
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+/**
+ * Cache-first data fetching with stale-while-revalidate pattern.
+ * Shows cached data immediately, then refreshes from network.
+ */
+export async function fetchWithCache<T>(
+  cacheKey: string,
+  fetcher: () => Promise<T>,
+  ttlMs: number = 5 * 60 * 1000, // 5 minutes default
+): Promise<{ data: T; fromCache: boolean }> {
+  try {
+    // Try cache first
+    const cached = await AsyncStorage.getItem(cacheKey);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      const isStale = Date.now() - timestamp > ttlMs;
+
+      if (!isStale) {
+        // Fresh cache — return immediately, refresh in background
+        fetcher().then((fresh) => {
+          AsyncStorage.setItem(cacheKey, JSON.stringify({ data: fresh, timestamp: Date.now() }));
+        }).catch(() => {}); // silent refresh failure
+        return { data: data as T, fromCache: true };
+      }
+
+      // Stale cache — return cached, then update
+      fetcher().then((fresh) => {
+        AsyncStorage.setItem(cacheKey, JSON.stringify({ data: fresh, timestamp: Date.now() }));
+      }).catch(() => {});
+      return { data: data as T, fromCache: true };
+    }
+  } catch {}
+
+  // No cache — fetch from network
+  const data = await fetcher();
+  try {
+    await AsyncStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch {}
+  return { data, fromCache: false };
+}
+```
+
+### 11.5 SOS Offline Resilience
+
+```typescript
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
+
+/**
+ * SOS must work even without network.
+ * Queue SOS request locally, send when connectivity returns.
+ */
+export async function triggerSOSResilient(
+  orderId: string,
+  location: { lat: number; lng: number },
+  callAmbulance: boolean,
+): Promise<{ dispatched: boolean; queued: boolean }> {
+  const netState = await NetInfo.fetch();
+
+  if (!netState.isConnected) {
+    // Offline: queue SOS locally, pre-load emergency SMS
+    await AsyncStorage.setItem('@elderly/pending_sos', JSON.stringify({
+      orderId, location, callAmbulance,
+      triggeredAt: new Date().toISOString(),
+    }));
+
+    // Pre-compose emergency SMS for immediate send if SMS works
+    const emergencyContacts = JSON.parse(
+      await AsyncStorage.getItem('@elderly/emergency_contacts') || '[]',
+    );
+    const smsBody = `【紧急求助】老人正在打车(订单${orderId.slice(0, 8)})，位置：${location.lat},${location.lng}，请立即联系！`;
+
+    // Attempt to send SMS directly (may work even without data)
+    try {
+      await Promise.all(
+        (emergencyContacts as string[]).map((phone) =>
+          fetch(`sms:${phone}?body=${encodeURIComponent(smsBody)}`),
+        ),
+      );
+    } catch {}
+
+    return { dispatched: false, queued: true };
+  }
+
+  // Online: normal SOS flow
+  const response = await SafetyService.triggerSOS(orderId, location);
+  return { dispatched: response.dispatched, queued: false };
+}
+
+/**
+ * On app startup, check for pending SOS requests and retry.
+ */
+export async function flushPendingSOS() {
+  const pending = await AsyncStorage.getItem('@elderly/pending_sos');
+  if (!pending) return;
+
+  const { orderId, location, callAmbulance } = JSON.parse(pending);
+  const netState = await NetInfo.fetch();
+
+  if (netState.isConnected) {
+    try {
+      await SafetyService.triggerSOS(orderId, location);
+      await AsyncStorage.removeItem('@elderly/pending_sos');
+    } catch {}
+  }
+}
+```
+
+### 11.6 Voice Recognition Error Handling
+
+```typescript
+/**
+ * Voice recognition with graceful degradation.
+ * Handles: no permission, network error, low confidence, silent input.
+ */
+export async function recognizeVoiceWithFallback(
+  onResult: (text: string) => void,
+  onError: (fallback: 'manual_input' | 'retry' | 'hotline') => void,
+): Promise<void> {
+  const MAX_RETRIES = 3;
+  const MIN_CONFIDENCE = 0.7;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const result = await VoiceService.recognizeWithConfidence();
+
+      if (!result.text || result.text.trim().length === 0) {
+        // Silent input — user didn't speak
+        if (attempt < MAX_RETRIES - 1) {
+          VoiceService.speak('没有听清，请再说一次');
+          continue;
+        }
+        onError('manual_input');
+        return;
+      }
+
+      if (result.confidence < MIN_CONFIDENCE) {
+        // Low confidence — show candidate list instead of error
+        onResult(result.text); // caller should show candidate list UI
+        return;
+      }
+
+      onResult(result.text);
+      return;
+    } catch (err) {
+      const error = err as any;
+      if (error.code === 'PERMISSION_DENIED') {
+        onError('manual_input');
+        return;
+      }
+      if (attempt < MAX_RETRIES - 1) {
+        await new Promise((r) => setTimeout(r, 1000));
+        continue;
+      }
+      onError('hotline');
+    }
+  }
+}
+```
+
+### 11.7 Payment Polling with Timeout
+
+```typescript
+/**
+ * Poll payment status until confirmed or timeout.
+ * Handles: network blips, pending state, terminal states.
+ */
+export async function pollPaymentStatus(
+  orderId: string,
+  timeoutMs: number = 30_000,  // 30 seconds
+  intervalMs: number = 3_000,  // 3 seconds
+): Promise<PaymentStatus> {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      const status = await PaymentService.getStatus(orderId);
+
+      // Terminal states — stop polling
+      if (status.status === 'paid' || status.status === 'expired') {
+        return status;
+      }
+
+      // Still pending — wait and retry
+      await new Promise((r) => setTimeout(r, intervalMs));
+    } catch {
+      // Network error — wait longer before retry
+      await new Promise((r) => setTimeout(r, intervalMs * 2));
+    }
+  }
+
+  // Timeout — return last known state
+  return { status: 'pending', method: 'unknown' as any };
+}
+```

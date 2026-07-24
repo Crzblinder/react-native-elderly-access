@@ -1,0 +1,171 @@
+@startuml
+title 适老化打车平台 - 亲友追踪与代付完整链路时序图 (Family Tracking & Payment Sequence)
+
+actor "亲友用户\n(女儿小王)" as Family
+participant "短信/微信" as SMS
+participant "H5页面\n(WebView)" as H5
+participant "后端API\n(Backend API)" as API
+participant "安全服务\n(SafetyService)" as Safety
+participant "支付服务\n(PaymentService)" as PaySvc
+participant "支付网关\n(WeChat/Alipay)" as PGW
+participant "司机端" as Driver
+
+== 1. 行程通知触发 ==
+Driver -> API: 接单确认\n(父亲已叫车)
+activate API
+API -> Safety: 通知亲友行程开始
+activate Safety
+Safety -> Safety: 查询紧急联系人\n(女儿小王: 138****5678)
+
+Safety -> SMS: 发送行程通知
+activate SMS
+SMS --> Family: 短信通知\n"父亲已叫车\n司机: 王师傅 京A·12345\n起点: 幸福小区 → 人民医院\n点击查看实时位置:\nhttps://elderly.taxi/trip/abc123"
+deactivate SMS
+
+Family -> SMS: 点击链接
+SMS -> H5: 打开H5页面
+activate H5
+
+== 2. 实时位置追踪 ==
+H5 -> API: GET /api/v1/trips/{orderId}/track
+activate API
+API -> Safety: 获取实时位置
+Safety -> Safety: 查询司机当前位置\n{lat, lng, heading, speed}
+Safety --> API: 返回位置信息
+API --> H5: 返回追踪数据\n{driverLocation, route, eta: 8min, status: "in_trip"}
+deactivate API
+
+H5 -> H5: 渲染实时地图\n(MapView, 父亲位置+路线)
+H5 --> Family: 显示追踪页面\n"父亲正在前往人民医院\n预计到达: 8分钟"
+
+loop 每5秒位置更新
+  H5 -> API: GET /api/v1/trips/{orderId}/track
+  activate API
+  API -> Safety: 获取最新位置
+  Safety --> API: 位置更新
+  API --> H5: 实时位置同步
+  deactivate API
+  H5 -> H5: 刷新地图标记
+end
+
+== 3. 一键联系司机 ==
+Family -> H5: 点击"拨打司机电话"
+H5 -> H5: 调起系统拨号\n(tel:138****9012)
+
+alt 电话接通
+  Family -> Driver: 通话中\n"师傅您好，请问我父亲还好吗？"
+  Driver --> Family: "一切正常，还有5分钟到"
+else 无法接通
+  H5 -> API: 请求司机回拨
+  activate API
+  API -> Driver: 推送"请回拨亲友"
+  API --> H5: 已通知司机回拨
+  deactivate API
+end
+
+== 4. 行程异常检测 ==
+Safety -> Safety: 持续监控行程
+
+alt 行程偏离路线
+  Safety -> Safety: 检测到路线偏移\n(偏离预定路线 > 500m)
+  Safety -> SMS: 发送偏离告警
+  activate SMS
+  SMS --> Family: "⚠️ 父亲行程偏离预定路线\n点击查看实时位置"
+  deactivate SMS
+  H5 -> H5: 高亮显示偏离路线
+  note right: 竞品启发(P2)\n解决行程安全焦虑
+end
+
+alt 长时间停留
+  Safety -> Safety: 检测到长时间停留\n(停留 > 10分钟非目的地)
+  Safety -> SMS: 发送停留告警
+  SMS --> Family: "⚠️ 父亲行程已停留10分钟\n点击查看实时位置"
+end
+
+== 5. SOS紧急通知 ==
+alt 父亲触发SOS
+  Safety -> Family: 紧急推送(最高优先级)
+  Family -> H5: 打开紧急页面
+  H5 -> API: GET /api/v1/safety/sos/{sosId}/status
+  activate API
+  API --> H5: 返回SOS状态\n{dispatched: true, services: ["110","120"], location, recordingStarted: true}
+  deactivate API
+  H5 -> H5: 显示紧急信息\n"父亲已触发SOS求助\n已拨打110/120\n实时位置: [地图]\n行程录音已启动"
+  H5 --> Family: 紧急状态页面
+  Family -> Family: 采取行动\n(联系父亲/赶往现场/联系平台)
+end
+
+== 6. 行程结束与代付 ==
+Driver -> API: 结束行程
+activate API
+API -> API: 计算费用\n(里程: 5.2km, 费用: ¥28.00)
+API -> API: 更新订单状态: completed
+API --> H5: 推送行程完成通知\n{orderId, amount: 28.00, tripSummary}
+deactivate API
+
+H5 --> Family: 显示行程完成\n"父亲已到达人民医院\n费用: ¥28.00"
+
+alt 父亲选择亲友代付
+  API -> SMS: 发送代付请求
+  activate SMS
+  SMS --> Family: "父亲请求您代付车费\n行程: 幸福小区 → 人民医院\n费用: ¥28.00\n点击支付: https://elderly.taxi/pay/abc123"
+  deactivate SMS
+
+  Family -> SMS: 点击支付链接
+  SMS -> H5: 打开支付页面
+
+  H5 -> API: GET /api/v1/payments/{orderId}
+  activate API
+  API --> H5: 返回支付详情\n{from, to, duration, amount: 28.00, driverName, plateNumber}
+  deactivate API
+
+  H5 -> H5: 展示支付确认页\n"行程详情\n幸福小区 → 人民医院\n15分钟 · ¥28.00\n司机: 王师傅 京A·12345"
+  H5 --> Family: 确认支付页面
+
+  Family -> H5: 点击"确认代付"
+  H5 -> PaySvc: 发起代付
+  activate PaySvc
+  PaySvc -> API: POST /api/v1/payments/{orderId}/pay\n{method: "family", familyContact: {name: "女儿小王", phone: "138****5678"}}
+  activate API
+  API -> PGW: 发起支付\n(微信支付/支付宝)
+  activate PGW
+  PGW -> PGW: 处理支付
+  PGW --> API: 支付成功
+  deactivate PGW
+  API -> API: 更新支付状态: paid
+  API --> PaySvc: 支付成功
+  deactivate API
+  PaySvc --> H5: 支付完成
+  deactivate PaySvc
+
+  H5 -> H5: 显示支付成功\n"支付成功 ✓\n¥28.00\n父亲已收到支付确认"
+  H5 --> Family: 支付结果
+
+  API -> SMS: 发送支付确认给父亲
+  SMS --> Family: "支付成功通知"
+end
+
+== 7. 行后关怀 ==
+H5 -> API: GET /api/v1/trips/{orderId}/receipt
+activate API
+API --> H5: 返回电子收据\n{from, to, duration, fare, driver, paidAt}
+deactivate API
+
+H5 -> H5: 展示电子收据
+H5 --> Family: 收据页面
+
+alt 目的地为医院
+  H5 -> H5: 显示就医关怀\n"父亲已到达人民医院\n祝早日康复"
+  H5 -> API: 记录到达确认
+end
+
+H5 -> API: 可查看历史行程\n(父亲最近行程列表)
+activate API
+API --> H5: 返回历史行程列表
+deactivate API
+
+deactivate H5
+deactivate Safety
+deactivate API
+
+@enduml

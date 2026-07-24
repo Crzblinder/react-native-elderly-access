@@ -487,3 +487,267 @@ Standard keys used across the app for persisting user preferences:
 | `@elderly/payment_preference`   | `'online' \| 'cash' \| 'family'` | Default payment method |
 | `@elderly/medical_priority_enabled` | `boolean` | Auto-enable medical priority |
 | `@elderly/plate_verification_enabled` | `boolean` | Enable plate check before boarding |
+| `@elderly/pending_sos` | `object` | Queued SOS request (offline) |
+| `@elderly/pending_hotline` | `object` | Pending 95128 hotline call marker |
+
+---
+## Error Code Reference
+
+All API errors follow a structured envelope. See [prd.md](prd.md) §12 for the full error code catalog.
+
+```typescript
+// Error response envelope
+interface ApiErrorResponse {
+  error: {
+    code: string;           // e.g., "3003"
+    message: string;        // User-facing Chinese message
+    detail: string;         // Developer-facing English detail
+    action: 'retry' | 'fallback' | 'contact_support';
+    fallbackUrl?: string;   // e.g., "tel:95128"
+    retryAfter?: number;    // Seconds to wait before retry
+  };
+}
+```
+
+### Common Error Codes (Client-Side)
+
+| Code | Category | User Message | Client Action |
+|------|----------|-------------|---------------|
+| `3003` | No driver | "附近暂无可用车辆，建议拨打95128" | Show retry + 95128 button |
+| `3004` | No address | "请先设置家庭地址" | Navigate to Settings |
+| `4002` | Payment expired | "支付链接已过期，请重新发送" | Show resend button |
+| `6001` | Voice timeout | "没有听清，请再说一次" | Auto-retry (max 3) |
+| `6003` | Mic denied | "请在设置中开启麦克风" | Show manual input |
+| `5001` | SOS active | "已有进行中的求助" | Show SOS status screen |
+| `7001` | SMS failed | "短信发送失败，请稍后重试" | Auto-retry (max 3) |
+
+### Error Handling Utility
+
+```typescript
+import { ApiError } from '../services/ApiClient';
+
+/**
+ * Map API error codes to elderly-friendly UI actions.
+ * Never expose raw error codes to elderly users.
+ */
+export function handleApiError(error: ApiError): {
+  title: string;
+  message: string;
+  primaryAction: { label: string; action: () => void };
+  secondaryAction?: { label: string; action: () => void };
+} {
+  const responses: Record<string, any> = {
+    '3003': {
+      title: '暂无可用车辆',
+      message: '附近暂无可用车辆，建议拨打 95128 热线叫车',
+      primaryAction: { label: '拨打 95128', action: () => Linking.openURL('tel:95128') },
+      secondaryAction: { label: '重试', action: () => {} },
+    },
+    '3004': {
+      title: '未设置地址',
+      message: '请先在"我的"页面设置家庭地址，然后就可以一键打车回家了',
+      primaryAction: { label: '去设置', action: () => navigation.navigate('Settings') },
+    },
+    '4002': {
+      title: '支付链接已过期',
+      message: '支付链接已过期（超过24小时），请重新发送给家人',
+      primaryAction: { label: '重新发送', action: () => {} },
+      secondaryAction: { label: '自己支付', action: () => {} },
+    },
+    '6001': {
+      title: '没有听清',
+      message: '没有听清您说的话，请靠近手机再说一次',
+      primaryAction: { label: '重新说', action: () => {} },
+      secondaryAction: { label: '手动输入', action: () => navigation.navigate('ManualInput') },
+    },
+    '6003': {
+      title: '麦克风未开启',
+      message: '请在手机设置中开启麦克风权限，或使用手动输入',
+      primaryAction: { label: '手动输入', action: () => navigation.navigate('ManualInput') },
+    },
+  };
+
+  const response = responses[error.code];
+  if (response) return response;
+
+  // Default for unknown errors
+  return {
+    title: '网络异常',
+    message: '网络连接失败，请检查网络后重试',
+    primaryAction: { label: '重试', action: () => {} },
+    secondaryAction: { label: '返回首页', action: () => navigation.navigate('Home') },
+  };
+}
+```
+
+---
+## Response Type Definitions
+
+### Core Domain Types
+
+```typescript
+// --- Order & Ride ---
+interface Order {
+  orderId: string;
+  userId: string;
+  status: OrderStatus;
+  pickup: Location;
+  destination: Location;
+  priorityType: 'normal' | 'hospital';
+  entryType: 'one_tap' | 'voice' | 'qr_station' | 'hotline';
+  stationId?: string;
+  estimatedFare: Money;
+  estimatedETA: number; // seconds
+  matchRadius: number; // meters
+  createdAt: string; // ISO8601
+  updatedAt: string;
+}
+
+type OrderStatus =
+  | 'matching'
+  | 'matching_expanded'
+  | 'assigned'
+  | 'arriving'
+  | 'arrived'
+  | 'in_trip'
+  | 'completed'
+  | 'cancelled';
+
+interface Location {
+  lat: number;
+  lng: number;
+  address: string;
+}
+
+interface Money {
+  amount: number;
+  currency: 'CNY';
+}
+
+interface DriverInfo {
+  name: string;
+  phone: string; // masked: 138****8000
+  plateNumber: string;
+  carModel: string;
+  carColor: string;
+  rating: number; // 0-5
+  location: { lat: number; lng: number };
+  eta: number; // seconds
+}
+
+// --- Payment ---
+interface PaymentStatus {
+  status: 'pending' | 'paid' | 'expired' | 'refunded';
+  method: 'online' | 'cash' | 'family';
+}
+
+interface Receipt {
+  paymentId: string;
+  orderId: string;
+  from: string;
+  to: string;
+  duration: string;
+  amount: Money;
+  driverName: string;
+  method: 'online' | 'cash' | 'family';
+  paidAt: string;
+}
+
+// --- Safety ---
+interface EmergencyResponse {
+  sosId: string;
+  dispatched: boolean;
+  services: Array<'110' | '120'>;
+  familyNotified: boolean;
+  recordingStarted: boolean;
+  platformNotified: boolean;
+}
+
+interface PlateVerificationResult {
+  match: boolean;
+  warningLevel: 'none' | 'mismatch' | 'unknown';
+  action: 'board' | 'recheck' | 'cancel';
+  familyNotified: boolean;
+}
+
+// --- Voice ---
+interface VoiceRecognitionResult {
+  text: string;
+  confidence: number; // 0-1
+  intent?: VoiceIntent;
+}
+
+interface VoiceIntent {
+  action: IntentAction;
+  destination?: string;
+  contact?: string;
+  confidence: number;
+}
+
+type IntentAction =
+  | 'RIDE_HOME'
+  | 'RIDE_TO'
+  | 'REQUEST_RIDE'
+  | 'CANCEL_RIDE'
+  | 'CHECK_STATUS'
+  | 'CALL_FAMILY'
+  | 'SOS_TRIGGER'
+  | 'PLATE_VERIFY'
+  | 'CASH_PAY'
+  | 'MEDICAL_DISPATCH'
+  | 'QR_SCAN'
+  | 'HOTLINE_DIAL';
+
+// --- Accessibility ---
+interface ElderlyThemeConfig {
+  largeTextMode: boolean;
+  fontScale: number; // 1.0-2.0
+  highContrast: boolean;
+  reducedMotion: boolean;
+  spacing: number; // dp
+  primaryColor: string;
+  backgroundColor: string;
+}
+
+// --- Screen State ---
+type ScreenState<T> =
+  | { status: 'loading' }
+  | { status: 'error'; error: ApiError; userMessage: UserFriendlyError }
+  | { status: 'empty'; reason: string }
+  | { status: 'data'; data: T };
+
+interface UserFriendlyError {
+  title: string;
+  message: string;
+  action: string;
+}
+```
+
+---
+## API Endpoint Summary
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | `/api/v1/auth/login` | Phone OTP login | No |
+| POST | `/api/v1/auth/verify` | Verify OTP code | No |
+| POST | `/api/v1/rides` | Create ride order | User |
+| GET | `/api/v1/rides/{orderId}/status` | Get order status | User |
+| POST | `/api/v1/rides/{orderId}/cancel` | Cancel order | User |
+| GET | `/api/v1/rides/history` | Trip history | User |
+| POST | `/api/v1/rides/{orderId}/expand-match` | Expand matching radius | User |
+| POST | `/api/v1/payments/{orderId}/pay` | Initiate payment | User |
+| GET | `/api/v1/payments/{orderId}/status` | Check payment status | User |
+| POST | `/api/v1/payments/{orderId}/resend-link` | Resend family pay link | User |
+| POST | `/api/v1/safety/sos` | Trigger SOS emergency | User |
+| GET | `/api/v1/safety/sos/{sosId}/status` | Check SOS status | User |
+| POST | `/api/v1/safety/sos/{sosId}/cancel` | Cancel SOS (false alarm) | User |
+| POST | `/api/v1/safety/plate-verify` | Verify plate number | User |
+| POST | `/api/v1/safety/share-location` | Share location with family | User |
+| POST | `/api/v1/safety/start-recording` | Start trip recording | User |
+| POST | `/api/v1/safety/stop-recording` | Stop trip recording | User |
+| POST | `/api/v1/stations/resolve` | Resolve QR station info | User |
+| GET | `/api/v1/users/profile` | Get user profile | User |
+| PUT | `/api/v1/users/profile` | Update user profile | User |
+| POST | `/api/v1/users/family-contacts` | Add family contact | User |
+| GET | `/api/v1/users/family-contacts` | List family contacts | User |
+| DELETE | `/api/v1/users/family-contacts/{id}` | Remove family contact | User |
