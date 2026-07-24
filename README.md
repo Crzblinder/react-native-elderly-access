@@ -34,12 +34,12 @@ This project is a **Qoder Agent Skill** — a structured knowledge package that 
 | Deliverable | What It Does |
 |-------------|-------------|
 | **SKILL.md** (368 lines) | Core instructions the agent reads — design constraints, component patterns, screen templates |
-| **prd.md** (375+ lines) | Complete PRD with competitive analysis, 10 modules, non-functional requirements, usability data |
+| **prd.md** (1550+ lines) | Complete PRD: competitive analysis (15-dimension), 10 modules, UI wireframes (8 screens), compliance (6 regulations), disaster recovery, API versioning, usability data |
 | **reference.md** (272 lines) | Component API reference (7 components with full prop tables) |
 | **examples.md** (573 lines) | 6 production-ready screen implementations + usability test data model |
 | **accessibility-guide.md** (250 lines) | User research methodology, design specs, usability testing protocol |
-| **assets/architecture-diagram.md** | UML diagrams: use case, sequence, class, business flow, component architecture |
-| **uml-output/** | PlantUML sources + rendered PNGs for all 5 UML diagram types |
+| **assets/architecture-diagram.md** | UML architecture overview: 18 diagrams across 5 categories |
+| **uml-output/** | PlantUML sources + rendered PNGs: 18 UML files (use case, 8 sequence, 2 state machine, 2 activity, class, component, deployment, ER, DFD) |
 | **scripts/check-a11y.js** (364 lines) | CLI tool that scans your RN project for 7 categories of accessibility violations |
 | **scripts/gen-component.js** (662 lines) | CLI tool that scaffolds 7 types of elderly-friendly components |
 
@@ -388,18 +388,26 @@ react-native-elderly-access/
 │                                   #   Use case, business flow, sequence,
 │                                   #   class, component architecture
 │
-├── uml-output/                     # [UML] PlantUML source + rendered PNG
+├── uml-output/                     # [UML] PlantUML source + rendered PNG (18 files)
 │   ├── 01-use-case.puml            #   Use case diagram (15 UCs, 3 actors)
-│   ├── 01-use-case.png             #   Rendered PNG
 │   ├── 02-business-flow.puml       #   Original activity diagram
-│   ├── 02-business-flow-enhanced.puml #  Enhanced: safety guard, SOS, cash, medical
-│   ├── 02-business-flow-enhanced.png  #  Rendered PNG
-│   ├── 03-sequence-voice-booking.puml #  Sequence diagram (7 phases, 6 participants)
-│   ├── 03-sequence-voice-booking.png  #  Rendered PNG
-│   ├── 04-class-diagram.puml       #   Class diagram (20+ classes)
-│   ├── 04-class-diagram.png        #   Rendered PNG
-│   ├── 05-component-architecture.puml # Component diagram
-│   ├── 05-component-architecture.png  # Rendered PNG
+│   ├── 02-business-flow-enhanced.puml # Enhanced: safety guard, SOS, cash, medical
+│   ├── 03-sequence-voice-booking.puml # Voice booking sequence (7 phases)
+│   ├── 04-class-diagram.puml       #   Class diagram (9 services, 11 screens, 9 entities)
+│   ├── 05-component-architecture.puml # Deep component arch (3 layers, 35+ components)
+│   ├── 06-order-state-machine.puml #   Order lifecycle (14 states, 18 transitions)
+│   ├── 07-sos-state-machine.puml   #   SOS emergency state machine
+│   ├── 08-deployment-architecture.puml # K8s deployment (6 microservices)
+│   ├── 09-sequence-qr-booking.puml #   QR station booking sequence
+│   ├── 10-sequence-sos-emergency.puml # SOS emergency sequence (offline fallback)
+│   ├── 11-sequence-payment-flow.puml #  Multi-payment methods sequence
+│   ├── 12-er-diagram.puml          #   ER entity relationship (7 tables)
+│   ├── 13-data-flow-diagram.puml   #   Data flow diagram (Level 0 & 1)
+│   ├── 14-sequence-one-tap-booking.puml # One-tap booking (login, address, plate)
+│   ├── 15-sequence-hotline-booking.puml # 95128 hotline (IVR, operator, SMS)
+│   ├── 16-sequence-medical-priority.puml # Medical priority (POI, weight formula)
+│   ├── 17-sequence-family-tracking.puml # Family tracking (anomaly, SOS, payment)
+│   ├── 18-activity-onboarding.puml #   Onboarding & settings (3-step guide)
 │   └── render-png.ps1              #   Batch render script (PowerShell)
 │
 ├── scripts/
@@ -615,11 +623,11 @@ This skill was born from a real product design project:
 >
 > 1. **User Research**: Designed a mixed-method survey + deep interview study covering 200+ elderly users. Used persona modeling and journey mapping to translate emotional pain points ("too complex", "text too small") into quantifiable engineering requirements ("reduce decision nodes", "enlarge touch targets").
 >
-> 2. **Competitive Analysis**: Benchmarked against Didi Elderly Mode, Amap Assisted Ride, and 95128 hotline. Identified 7 new/stubborn pain points (wrong car, safety anxiety, cash exclusion, medical trips, no smartphone, long wait, voice ambiguity) and designed corresponding solutions (plate verification, SOS guard, cash payment, medical priority, QR/hotline entry, auto-expand range, confidence-aware voice).
+> 2. **Competitive Analysis**: Benchmarked against Didi Elderly Mode, Amap Assisted Ride, and 95128 hotline. Built a 15-dimension feature comparison matrix and market positioning map. Identified 10 new/stubborn pain points (wrong car, safety anxiety, cash exclusion, medical trips, no smartphone, long wait, voice ambiguity, payment anxiety, small text, driver location) and designed corresponding solutions (plate verification, SOS guard, cash payment, medical priority, QR/hotline entry, auto-expand range, confidence-aware voice, 3 payment methods, 1.0-2.0x font scale, TTS announce).
 >
 > 3. **Vibe Coding Prototype**: Using Qoder + Claude Code, independently built a high-fidelity interactive prototype of the elderly taxi app (voice booking, one-tap ride, large text mode) in 48 hours. Used directly for user testing and team reviews, compressing prototype iteration from 2 weeks to 3 days.
 >
-> 4. **System Modeling**: Completed full UML stack modeling — use case (15 UCs, 3 actors), business flow (enhanced with safety guard, SOS, cash, medical priority), sequence (7 phases, 6 participants), class (20+ classes including SafetyService), component architecture. All PlantUML sources and rendered PNGs included in `uml-output/`.
+> 4. **System Modeling**: Completed full UML stack modeling — 18 diagrams across 5 categories: use case (15 UCs, 3 actors), business flow (enhanced with safety guard, SOS, cash, medical priority), 8 sequence diagrams (voice, QR, SOS, payment, one-tap, hotline, medical priority, family tracking), class (9 services, 11 screens, 14 components, 9 entities), deep component architecture (3 layers, 35+ components), state machines (order lifecycle 14 states, SOS), deployment (K8s, 6 microservices), ER (7 tables), and data flow (Level 0 & 1). All PlantUML sources and rendered PNGs included in `uml-output/`.
 >
 > 5. **Validation**: Organized usability testing with 10 target users. Established a three-dimensional evaluation model (completion rate × task time × satisfaction). Through 3 rounds of iteration, reduced average ride-hailing time by over 1 minute and achieved 92% user satisfaction.
 
